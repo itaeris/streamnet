@@ -32,6 +32,7 @@ class DhcpAliasTest extends TestCase
             'host_name' => 'laptop',
         ]);
         Http::fake(['*' => Http::response([])]);
+        $this->session(['mikrotik_session_id' => $session->id]);
 
         $this->actingAs(User::factory()->create())
             ->put('/dhcp/alias', ['router_id' => '*A', 'comment' => 'Ruang meeting'])
@@ -68,6 +69,7 @@ class DhcpAliasTest extends TestCase
                 'browser' => '',
             ]);
         }
+        $this->session(['mikrotik_session_id' => $session->id]);
 
         $this->actingAs(User::factory()->create())
             ->getJson('/dhcp/dns?live=1&address=10.10.10.10')
@@ -99,6 +101,7 @@ class DhcpAliasTest extends TestCase
             'comment' => 'Lama',
         ]);
         Http::fake(['*' => Http::response([])]);
+        $this->session(['mikrotik_session_id' => $session->id]);
 
         $this->actingAs(User::factory()->create())
             ->put('/dhcp/alias', ['router_id' => '*A', 'comment' => ''])

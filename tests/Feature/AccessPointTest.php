@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\MikrotikSession;
 use App\Models\UnifiConnection;
 use App\Models\User;
 use App\Services\Unifi\UnifiClient;
@@ -58,6 +59,15 @@ class AccessPointTest extends TestCase
             ]),
         ]);
 
+        $session = $this->router();
+        UnifiConnection::query()->create([
+            'mikrotik_session_id' => $session->id,
+            'url' => 'https://unifi.test',
+            'api_key' => 'test-key',
+            'verify_tls' => true,
+        ]);
+        $this->session(['mikrotik_session_id' => $session->id]);
+
         $snapshot = app(UnifiClient::class)->snapshot();
 
         $this->assertTrue($snapshot['ok']);
@@ -71,6 +81,49 @@ class AccessPointTest extends TestCase
         $this->assertSame(12.5, $device['radios'][0]['retries']);
         $this->assertSame('Nano HD Lantai 1', $snapshot['clients'][0]['uplink']);
         Http::assertSent(fn ($request) => $request->hasHeader('X-API-KEY', 'test-key'));
+    }
+
+    public function test_another_session_does_not_use_the_saved_unifi_key(): void
+    {
+        config(['unifi.url' => '', 'unifi.api_key' => '']);
+        Http::fake();
+        $first = $this->router();
+        UnifiConnection::query()->create([
+            'mikrotik_session_id' => $first->id,
+            'url' => 'https://unifi.test',
+            'api_key' => 'only-first',
+            'verify_tls' => true,
+        ]);
+        $second = MikrotikSession::query()->create([
+            'name' => 'Cabang',
+            'host' => '10.20.20.1',
+            'scheme' => 'api',
+            'username' => 'wiki',
+            'password' => 'secret',
+            'enabled' => true,
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->withSession(['mikrotik_session_id' => $second->id])
+            ->get('/access-points')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('unifi.configured', false)
+                ->where('unifi.ok', false));
+
+        $this->assertSame([], Http::recorded()->map(fn ($pair) => $pair[0]->url())->filter(fn ($url) => str_contains($url, 'unifi') || str_contains($url, 'integration'))->values()->all());
+    }
+
+    private function router(): MikrotikSession
+    {
+        return MikrotikSession::query()->create([
+            'name' => 'AERIS',
+            'host' => '10.10.10.1',
+            'scheme' => 'api',
+            'username' => 'wiki',
+            'password' => 'secret',
+            'enabled' => true,
+        ]);
     }
 
     public function test_without_a_connection_the_page_says_not_connected(): void
@@ -92,8 +145,9 @@ class AccessPointTest extends TestCase
         config(['unifi.url' => '', 'unifi.api_key' => '']);
         Http::fake(['*' => Http::response(['data' => []])]);
         $user = User::factory()->create();
+        $session = $this->router();
 
-        $this->actingAs($user)
+        $this->actingAs($user)->withSession(['mikrotik_session_id' => $session->id])
             ->put('/pengaturan/unifi', [
                 'url' => 'https://unifi.example.test/',
                 'api_key' => 'secret-unifi-key',
@@ -104,6 +158,7 @@ class AccessPointTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $connection = UnifiConnection::query()->firstOrFail();
+        $this->assertSame($this->app['session']->get('mikrotik_session_id'), $connection->mikrotik_session_id);
         $this->assertSame('https://unifi.example.test', $connection->url);
         $this->assertSame('secret-unifi-key', $connection->api_key);
         $this->assertNotSame('secret-unifi-key', $connection->getRawOriginal('api_key'));
@@ -123,8 +178,16 @@ class AccessPointTest extends TestCase
     public function test_rejected_key_is_reported_without_crashing_the_page(): void
     {
         Http::fake(['*' => Http::response(['message' => 'Unauthorized'], 401)]);
+        $session = $this->router();
+        UnifiConnection::query()->create([
+            'mikrotik_session_id' => $session->id,
+            'url' => 'https://unifi.test',
+            'api_key' => 'rejected-key',
+            'verify_tls' => true,
+        ]);
 
         $this->actingAs(User::factory()->create())
+            ->withSession(['mikrotik_session_id' => $session->id])
             ->get('/access-points')
             ->assertOk()
             ->assertInertia(fn ($page) => $page

@@ -86,7 +86,7 @@ Port API atau REST router harus bisa dijangkau dari mesin yang menjalankan `mikr
 
 ## UniFi
 
-Menu **Access Points** membaca UniFi Network Integration API (`/proxy/network/integration/v1`) dari console UniFi OS. Hubungkan di **Pengaturan → UniFi**: alamat console, API key (disimpan terenkripsi), site, dan verifikasi TLS. Buat API key di UniFi Network → Settings → Control Plane → Integrations.
+Setelah masuk, pilih sesi MikroTik di `/sesi` sebelum membuka konsol. Menu **Access Points** membaca UniFi Network Integration API (`/proxy/network/integration/v1`). API key disimpan terenkripsi per sesi di **Pengaturan → UniFi**, jadi sesi router lain tidak memakai console yang sama. Buat API key di UniFi Network → Settings → Control Plane → Integrations.
 
 Kalau belum dihubungkan atau console tidak bisa dijangkau, halaman Access Points menampilkan "Belum terhubung" dengan tautan ke pengaturan.
 

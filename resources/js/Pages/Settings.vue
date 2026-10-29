@@ -435,7 +435,7 @@ function endpoint(session) {
 
             <article class="noc-card p-4">
                 <p class="text-[15px] font-semibold">Console UniFi</p>
-                <p class="mt-1 text-sm text-mist">Buat API key di UniFi Network → Settings → Control Plane → Integrations.</p>
+                <p class="mt-1 text-sm text-mist">API key ini hanya untuk sesi MikroTik yang sedang dibuka. Sesi lain memakai console-nya sendiri. Buat key di UniFi Network → Settings → Control Plane → Integrations.</p>
                 <form class="mt-4 grid gap-3 sm:grid-cols-2" @submit.prevent="submitUnifi">
                     <label class="block font-mono text-[11px] text-mute sm:col-span-2">
                         Alamat console

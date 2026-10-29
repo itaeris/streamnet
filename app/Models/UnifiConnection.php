@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class UnifiConnection extends Model
 {
     protected $fillable = [
+        'mikrotik_session_id',
         'url',
         'api_key',
         'site',
@@ -25,27 +26,8 @@ class UnifiConnection extends Model
         ];
     }
 
-    /**
-     * The single saved connection, adopting UNIFI_* from .env the first time.
-     */
-    public static function current(): ?self
+    public static function forSession(int $sessionId): ?self
     {
-        $saved = static::query()->first();
-        if ($saved !== null) {
-            return $saved;
-        }
-
-        $url = rtrim((string) config('unifi.url'), '/');
-        $key = (string) config('unifi.api_key');
-        if ($url === '' || $key === '') {
-            return null;
-        }
-
-        return static::query()->create([
-            'url' => $url,
-            'api_key' => $key,
-            'site' => (string) config('unifi.site') ?: null,
-            'verify_tls' => (bool) config('unifi.verify_tls'),
-        ]);
+        return static::query()->where('mikrotik_session_id', $sessionId)->first();
     }
 }

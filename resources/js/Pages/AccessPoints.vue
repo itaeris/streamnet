@@ -264,7 +264,7 @@ const clientColumns = [
         </span>
         <p class="mt-4 text-[15px] font-semibold">Belum terhubung ke UniFi</p>
         <p class="mt-1 max-w-md text-sm text-mist">
-            {{ unifi?.configured ? 'Console UniFi belum bisa dihubungi. Cek alamat, API key, atau koneksi ke console.' : 'Hubungkan console UniFi untuk melihat access point dan klien WiFi di sini.' }}
+            {{ unifi?.configured ? 'Console UniFi sesi ini belum bisa dihubungi. Cek alamat, API key, atau koneksi ke console.' : 'Sesi MikroTik ini belum punya API UniFi. Sambungkan console-nya di pengaturan.' }}
         </p>
         <p v-if="unifi?.configured && unifi?.error" class="mt-2 font-mono text-[11px] text-mute">{{ unifi.error }}</p>
         <Link href="/pengaturan/unifi" class="mt-5 inline-flex h-10 items-center gap-2 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640]">

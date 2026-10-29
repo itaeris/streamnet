@@ -100,6 +100,7 @@ class BandwidthPolicyTest extends TestCase
         app(MikrotikPoller::class)->poll($session);
         Http::fake(['*' => Http::response([])]);
 
+        $this->session(['mikrotik_session_id' => $session->id]);
         $this->actingAs(User::factory()->create())
             ->put('/bandwidth-policy', [
                 'capacity_down' => 270,
@@ -140,6 +141,7 @@ class BandwidthPolicyTest extends TestCase
             ]);
         }
 
+        $this->session(['mikrotik_session_id' => $session->id]);
         $response = $this->actingAs(User::factory()->create())
             ->get('/bandwidth-policy/incidents/export?range=today')
             ->assertOk()
@@ -162,8 +164,9 @@ class BandwidthPolicyTest extends TestCase
 
     public function test_client_limit_cannot_exceed_capacity(): void
     {
-        $this->router();
+        $session = $this->router();
         LiveSnapshot::query()->delete();
+        $this->session(['mikrotik_session_id' => $session->id]);
 
         $this->actingAs(User::factory()->create())
             ->from('/bandwidth-policy')

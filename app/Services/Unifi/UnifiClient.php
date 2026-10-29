@@ -3,6 +3,7 @@
 namespace App\Services\Unifi;
 
 use App\Models\UnifiConnection;
+use App\Services\Mikrotik\CurrentMikrotikSession;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -24,14 +25,35 @@ class UnifiClient
 
     public function forget(): void
     {
-        Cache::forget('unifi.snapshot');
-        Cache::forget('unifi.sites');
+        $sessionId = $this->sessionId();
+        if ($sessionId) {
+            Cache::forget($this->cacheKey('snapshot', $sessionId));
+            Cache::forget($this->cacheKey('sites', $sessionId));
+        }
         $this->connection = null;
     }
 
     private function connection(): ?UnifiConnection
     {
-        return $this->connection ??= UnifiConnection::current();
+        if ($this->connection !== null) {
+            return $this->connection;
+        }
+
+        $sessionId = $this->sessionId();
+
+        return $this->connection = $sessionId ? UnifiConnection::forSession($sessionId) : null;
+    }
+
+    private function sessionId(): ?int
+    {
+        $id = app(CurrentMikrotikSession::class)->resolve()?->id;
+
+        return $id ? (int) $id : null;
+    }
+
+    private function cacheKey(string $name, ?int $sessionId = null): string
+    {
+        return 'unifi.'.$name.'.'.($sessionId ?? $this->sessionId() ?? 0);
     }
 
     /**
@@ -45,17 +67,17 @@ class UnifiClient
             return ['ok' => false, 'configured' => false, 'error' => null];
         }
 
-        $cached = Cache::get('unifi.snapshot');
+        $cached = Cache::get($this->cacheKey('snapshot'));
         if (is_array($cached)) {
             return $cached;
         }
 
         try {
             $snapshot = $this->fetch();
-            Cache::put('unifi.snapshot', $snapshot, max(1, (int) config('unifi.cache_seconds')));
+            Cache::put($this->cacheKey('snapshot'), $snapshot, max(1, (int) config('unifi.cache_seconds')));
         } catch (Throwable $exception) {
             $snapshot = ['ok' => false, 'configured' => true, 'error' => $exception->getMessage()];
-            Cache::put('unifi.snapshot', $snapshot, 5);
+            Cache::put($this->cacheKey('snapshot'), $snapshot, 5);
         }
 
         return $snapshot;
@@ -248,7 +270,7 @@ class UnifiClient
     private function site(): array
     {
         $wanted = strtolower(trim((string) $this->connection()?->site));
-        $sites = Cache::remember('unifi.sites', 3600, fn () => $this->list('/sites'));
+        $sites = Cache::remember($this->cacheKey('sites'), 3600, fn () => $this->list('/sites'));
 
         foreach ($sites as $site) {
             $keys = array_map('strtolower', [(string) ($site['id'] ?? ''), (string) ($site['internalReference'] ?? ''), (string) ($site['name'] ?? '')]);

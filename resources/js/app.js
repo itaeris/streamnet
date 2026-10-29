@@ -10,7 +10,5 @@ createInertiaApp({
     setup({ el, App, props, plugin }) {
         createApp({ render: () => h(App, props) }).use(plugin).component('Icon', Icon).directive('tip', tooltip).mount(el);
     },
-    progress: {
-        color: '#3ee0a2',
-    },
+    progress: false,
 });

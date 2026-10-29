@@ -9,6 +9,7 @@ use App\Models\MikrotikSession;
 use App\Models\RouterLog;
 use App\Models\SecurityEvent;
 use App\Models\SystemSample;
+use App\Models\UnifiConnection;
 use App\Services\AnalyticsQuery;
 use App\Services\Mikrotik\CurrentMikrotikSession;
 use Illuminate\Http\RedirectResponse;
@@ -19,6 +20,38 @@ use Inertia\Response;
 
 class MikrotikSessionController extends Controller
 {
+    public function sites(): Response
+    {
+        $sessions = MikrotikSession::query()->orderBy('name')->orderBy('id')->get();
+        $pulses = LiveSnapshot::query()
+            ->where('key', 'pulse')
+            ->whereIn('mikrotik_session_id', $sessions->pluck('id'))
+            ->get()
+            ->keyBy('mikrotik_session_id');
+        $connected = UnifiConnection::query()
+            ->whereIn('mikrotik_session_id', $sessions->pluck('id'))
+            ->pluck('mikrotik_session_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        return Inertia::render('Sites', [
+            'sessions' => $sessions->map(function (MikrotikSession $session) use ($pulses, $connected) {
+                $payload = $pulses->get($session->id)?->payload ?? [];
+
+                return [
+                    'id' => $session->id,
+                    'name' => $session->name,
+                    'host' => $session->host,
+                    'enabled' => $session->enabled,
+                    'online' => (bool) ($payload['online'] ?? false),
+                    'identity' => $payload['system']['identity'] ?? null,
+                    'sampled_label' => $payload['sampled_label'] ?? null,
+                    'unifi' => in_array($session->id, $connected, true),
+                ];
+            })->values(),
+        ]);
+    }
+
     public function account(CurrentMikrotikSession $current, AnalyticsQuery $analytics): Response
     {
         $active = $current->resolve();

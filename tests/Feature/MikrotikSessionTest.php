@@ -73,6 +73,31 @@ class MikrotikSessionTest extends TestCase
         $this->assertSame('kept-secret', $session->password);
     }
 
+    public function test_the_console_waits_until_a_session_is_chosen(): void
+    {
+        $user = User::factory()->create();
+        MikrotikSession::query()->create([
+            'name' => 'AERIS | FTI',
+            'host' => '10.10.10.1',
+            'scheme' => 'api',
+            'username' => 'wiki',
+            'password' => 'secret',
+            'enabled' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get('/')
+            ->assertRedirect('/sesi');
+
+        $this->actingAs($user)
+            ->get('/sesi')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Sites', false)
+                ->where('sessions.0.name', 'AERIS | FTI')
+                ->where('sessions.0.unifi', false));
+    }
+
     public function test_activating_a_session_selects_it_on_the_dashboard(): void
     {
         $user = User::factory()->create();

@@ -29,7 +29,7 @@ class UserManagementTest extends TestCase
         $this->assertTrue(Hash::check('rahasia-baru', $user->password));
 
         auth()->logout();
-        $this->post('/login', ['email' => 'teknisi@example.test', 'password' => 'rahasia-baru'])->assertRedirect('/');
+        $this->post('/login', ['email' => 'teknisi@example.test', 'password' => 'rahasia-baru'])->assertRedirect('/sesi');
     }
 
     public function test_editing_without_a_password_keeps_it(): void

@@ -15,8 +15,8 @@ class UnifiSettingsController extends Controller
 {
     public function show(CurrentMikrotikSession $current, AnalyticsQuery $analytics, UnifiClient $unifi): Response
     {
-        $connection = UnifiConnection::current();
         $active = $current->resolve();
+        $connection = $active ? UnifiConnection::forSession($active->id) : null;
 
         return Inertia::render('Settings', [
             'section' => 'unifi',
@@ -31,9 +31,14 @@ class UnifiSettingsController extends Controller
         ]);
     }
 
-    public function update(Request $request, UnifiClient $unifi): RedirectResponse
+    public function update(Request $request, CurrentMikrotikSession $current, UnifiClient $unifi): RedirectResponse
     {
-        $connection = UnifiConnection::query()->first();
+        $active = $current->resolve();
+        if (! $active) {
+            return redirect()->route('sites');
+        }
+
+        $connection = UnifiConnection::forSession($active->id);
         $data = $request->validate([
             'url' => ['required', 'url:https,http', 'max:255'],
             'api_key' => [$connection ? 'nullable' : 'required', 'string', 'max:255'],
@@ -52,15 +57,19 @@ class UnifiSettingsController extends Controller
             unset($data['api_key']);
         }
 
+        $data['mikrotik_session_id'] = $active->id;
         $connection ? $connection->update($data) : UnifiConnection::query()->create($data);
         $unifi->forget();
 
         return back();
     }
 
-    public function destroy(UnifiClient $unifi): RedirectResponse
+    public function destroy(CurrentMikrotikSession $current, UnifiClient $unifi): RedirectResponse
     {
-        UnifiConnection::query()->delete();
+        $active = $current->resolve();
+        if ($active) {
+            UnifiConnection::query()->where('mikrotik_session_id', $active->id)->delete();
+        }
         $unifi->forget();
 
         return back();

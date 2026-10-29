@@ -92,6 +92,7 @@ class TimeWindowTest extends TestCase
             'password' => 'secret',
             'enabled' => true,
         ]);
+        $this->session(['mikrotik_session_id' => $session->id]);
 
         RouterLog::query()->create([
             'mikrotik_session_id' => $session->id,

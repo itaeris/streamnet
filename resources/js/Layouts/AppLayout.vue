@@ -93,6 +93,7 @@ const navigating = ref(false);
 const skeletonKind = ref('table');
 let refreshTimer = 0;
 let navigationToken = 0;
+let skeletonTimer = 0;
 
 function skeletonFor(path) {
     if (path === '/') {
@@ -202,15 +203,17 @@ function beginNavigation(event) {
 
     const token = ++navigationToken;
     skeletonKind.value = skeletonFor(path);
-    window.setTimeout(() => {
+    window.clearTimeout(skeletonTimer);
+    skeletonTimer = window.setTimeout(() => {
         if (token === navigationToken) {
             navigating.value = true;
         }
-    }, 0);
+    }, 180);
 }
 
 function endNavigation() {
     navigationToken += 1;
+    window.clearTimeout(skeletonTimer);
     navigating.value = false;
 }
 
@@ -262,6 +265,9 @@ const dotClass = computed(() => {
         <header class="z-30 shrink-0">
             <div class="flex items-center justify-between gap-3 px-1">
                 <div class="flex min-w-0 items-center gap-3">
+                    <Link href="/sesi" class="flex size-9 items-center justify-center rounded-lg text-mute hover:bg-tile hover:text-paper" v-tip="'Semua sesi'">
+                        <Icon class="text-[20px]" name="sites" />
+                    </Link>
                     <button type="button" class="hidden size-9 items-center justify-center rounded-lg text-mute hover:bg-tile hover:text-paper lg:flex" v-tip:right="collapsed ? 'Buka sidebar' : 'Tutup sidebar'" @click="toggleSidebar">
                         <Icon class="text-[20px]" :name="collapsed ? 'left_panel_open' : 'left_panel_close'" />
                     </button>
@@ -304,6 +310,8 @@ const dotClass = computed(() => {
                     v-for="link in links"
                     :key="link.href"
                     :href="hrefFor(link.href)"
+                    :prefetch="['hover', 'click']"
+                    cache-for="10s"
                     class="shrink-0 rounded-md px-2.5 py-1.5 text-xs"
                     :class="current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'bg-tile text-mist'"
                 >
@@ -378,6 +386,8 @@ const dotClass = computed(() => {
                         v-for="link in links"
                         :key="link.href"
                         :href="hrefFor(link.href)"
+                        :prefetch="['hover', 'click']"
+                        cache-for="10s"
                         class="flex items-center gap-3 rounded-lg py-2.5 text-sm transition"
                         :class="[collapsed ? 'justify-center px-0' : 'px-3', current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper']"
                         v-tip:right="collapsed ? link.label : ''"
