@@ -191,29 +191,33 @@ onBeforeUnmount(() => {
             <header class="relative flex h-12 shrink-0 items-center justify-center px-12">
                 <h2 class="truncate text-sm font-medium">{{ panel.title }}</h2>
                 <button type="button" class="absolute right-3 rounded-md p-1 text-mute hover:text-paper" v-tip="'Tutup'" @click="close">
-                    <span class="material-symbols-outlined text-[18px]">close</span>
+                    <Icon class="text-[18px]" name="close" />
                 </button>
             </header>
 
-            <div v-if="tabs.length > 1" class="flex shrink-0 justify-center gap-1 px-4 pb-3">
-                <button
-                    v-for="tab in tabs"
-                    :key="tab.id"
-                    type="button"
-                    class="flex size-10 items-center justify-center rounded-lg"
-                    :class="active?.id === tab.id ? 'bg-active text-paper' : 'text-mute hover:text-mist'"
-                    v-tip="tab.label"
-                    @click="tabId = tab.id"
-                >
-                    <span class="material-symbols-outlined text-[20px]">{{ tab.icon }}</span>
-                </button>
+            <div v-if="tabs.length > 1" class="shrink-0 px-3 pb-3">
+                <div class="flex rounded-xl bg-well p-1" role="tablist">
+                    <button
+                        v-for="tab in tabs"
+                        :key="tab.id"
+                        type="button"
+                        role="tab"
+                        :aria-selected="active?.id === tab.id"
+                        class="flex h-9 flex-1 items-center justify-center rounded-lg transition-colors duration-150"
+                        :class="active?.id === tab.id ? 'bg-panel text-cyan shadow-sm ring-1 ring-edge' : 'text-mute hover:bg-hover hover:text-paper'"
+                        v-tip="tab.label"
+                        @click="tabId = tab.id"
+                    >
+                        <Icon class="text-[19px]" :name="tab.icon" />
+                    </button>
+                </div>
             </div>
 
             <div v-if="active" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 pb-6">
                 <section v-if="active.hero" class="rounded-xl border border-edge bg-menu p-3">
                     <div class="flex items-center gap-3">
                         <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-tile text-mist">
-                            <span class="material-symbols-outlined text-[22px]">{{ panel.icon || 'info' }}</span>
+                            <Icon class="text-[22px]" :name="panel.icon || 'info'" />
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="truncate text-sm font-medium">{{ panel.title }}</p>
@@ -235,7 +239,7 @@ onBeforeUnmount(() => {
                     <div v-if="panel.alias.value && !editingAlias" class="group mt-1 flex items-center justify-between gap-2">
                         <p class="min-w-0 truncate text-sm font-medium">{{ panel.alias.value }}</p>
                         <button type="button" class="shrink-0 rounded p-0.5 text-mute opacity-0 transition-opacity group-hover:opacity-100 hover:text-paper" v-tip="'Edit'" @click="startAliasEdit">
-                            <span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20">edit</span>
+                            <Icon class="text-[12px]" name="edit" />
                         </button>
                     </div>
                     <form v-else class="mt-2 flex items-center gap-1.5" @submit.prevent="submitAlias(draft)">

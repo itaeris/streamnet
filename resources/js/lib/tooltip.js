@@ -73,7 +73,7 @@ function iconOnly(el) {
             return !child.textContent.trim();
         }
 
-        return child.nodeType !== Node.ELEMENT_NODE || child.classList.contains('material-symbols-outlined');
+        return child.nodeType !== Node.ELEMENT_NODE || child.classList.contains('app-icon');
     });
 }
 

@@ -105,24 +105,24 @@ onBeforeUnmount(() => {
         <div class="relative" :class="live ? 'opacity-40' : ''">
         <div class="flex items-center rounded-full bg-well p-0.5">
             <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" v-tip="'Mundur satu rentang'" :disabled="live" @click="shiftWindow(-1)">
-                <span class="material-symbols-outlined text-[16px]">chevron_left</span>
+                <Icon class="text-[16px]" name="chevron_left" />
             </button>
             <button type="button" class="flex max-w-44 items-center gap-1 rounded-full px-2 py-1 text-mist hover:bg-hover hover:text-paper disabled:hover:bg-transparent" :aria-expanded="rangeOpen" :disabled="live" v-tip="live ? 'Live mengabaikan rentang waktu' : 'Rentang waktu'" @click="toggleRange">
-                <span class="material-symbols-outlined text-[15px]">schedule</span>
+                <Icon class="text-[15px]" name="schedule" />
                 <span class="truncate font-mono text-[11px]">{{ rangeLabel }}</span>
-                <span class="material-symbols-outlined text-[16px] transition-transform duration-200" :class="rangeOpen ? 'rotate-180' : ''">expand_more</span>
+                <Icon class="text-[16px] transition-transform duration-200" :class="rangeOpen ? 'rotate-180' : ''" name="expand_more" />
             </button>
             <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" v-tip="'Maju satu rentang'" :disabled="live || !pinned" @click="shiftWindow(1)">
-                <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                <Icon class="text-[16px]" name="chevron_right" />
             </button>
             <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" v-tip="'Perlebar rentang'" :disabled="live || !canZoomOut" @click="zoomOut">
-                <span class="material-symbols-outlined text-[16px]">zoom_out</span>
+                <Icon class="text-[16px]" name="zoom_out" />
             </button>
         </div>
 
         <MenuPanel :open="rangeOpen" class="absolute top-full right-0 z-40 mt-1 w-64 origin-top-right overflow-hidden rounded-lg border border-edge bg-menu shadow-xl">
             <label class="flex items-center gap-2 border-b border-edge px-3 py-2">
-                <span class="material-symbols-outlined text-[16px] text-mute">search</span>
+                <Icon class="text-[16px] text-mute" name="search" />
                 <input v-model="query" type="search" placeholder="Search quick ranges" class="w-full bg-transparent font-mono text-xs text-paper outline-none placeholder:text-mute">
             </label>
             <div class="max-h-72 overflow-y-auto py-1">
@@ -159,11 +159,11 @@ onBeforeUnmount(() => {
         <div class="relative" :class="live ? 'opacity-40' : ''">
         <div class="flex items-center rounded-full bg-well p-0.5">
             <button type="button" class="inline-flex items-center rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:hover:bg-transparent" v-tip="'Refresh'" :disabled="live" @click="refreshNow">
-                <span class="material-symbols-outlined text-[16px]">refresh</span>
+                <Icon class="text-[16px]" name="refresh" />
             </button>
             <button type="button" class="flex items-center gap-0.5 rounded-full px-1.5 py-1 font-mono text-[11px] text-mist hover:bg-hover hover:text-paper disabled:hover:bg-transparent" :aria-expanded="refreshOpen" :disabled="live" @click="toggleRefresh">
                 {{ refreshLabel }}
-                <span class="material-symbols-outlined text-[16px] transition-transform duration-200" :class="refreshOpen ? 'rotate-180' : ''">expand_more</span>
+                <Icon class="text-[16px] transition-transform duration-200" :class="refreshOpen ? 'rotate-180' : ''" name="expand_more" />
             </button>
         </div>
 

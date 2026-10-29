@@ -176,11 +176,11 @@ const dotClass = computed(() => {
             <div class="flex items-center justify-between gap-3 px-1">
                 <div class="flex min-w-0 items-center gap-3">
                     <button type="button" class="hidden size-9 items-center justify-center rounded-lg text-mute hover:bg-tile hover:text-paper lg:flex" v-tip:right="collapsed ? 'Buka sidebar' : 'Tutup sidebar'" @click="toggleSidebar">
-                        <span class="material-symbols-outlined text-[20px]">{{ collapsed ? 'left_panel_open' : 'left_panel_close' }}</span>
+                        <Icon class="text-[20px]" :name="collapsed ? 'left_panel_open' : 'left_panel_close'" />
                     </button>
                     <div class="flex items-center gap-2">
                         <div class="flex size-8 shrink-0 items-center justify-center rounded-md bg-tile text-cyan">
-                            <span class="material-symbols-outlined text-[20px]">hub</span>
+                            <Icon class="text-[20px]" name="hub" />
                         </div>
                         <div class="leading-none">
                             <p class="text-[15px] font-semibold tracking-tight">StreamNet</p>
@@ -201,14 +201,14 @@ const dotClass = computed(() => {
                         v-tip="theme === 'light' ? 'Mode gelap' : 'Mode terang'"
                         @click="toggleTheme"
                     >
-                        <span class="material-symbols-outlined text-[18px]">{{ theme === 'light' ? 'dark_mode' : 'light_mode' }}</span>
+                        <Icon class="text-[18px]" :name="theme === 'light' ? 'dark_mode' : 'light_mode'" />
                     </button>
                     <span class="hidden font-mono text-[11px] text-mist xl:inline">{{ pulse?.sampled_label || '–' }}</span>
                     <Link :href="hrefFor('/pengaturan')" class="p-1 text-mute lg:hidden" v-tip="'Pengaturan'">
-                        <span class="material-symbols-outlined text-[18px]">settings</span>
+                        <Icon class="text-[18px]" name="settings" />
                     </Link>
                     <Link href="/logout" method="post" as="button" class="p-1 text-mute lg:hidden" v-tip="'Keluar'">
-                        <span class="material-symbols-outlined text-[18px]">logout</span>
+                        <Icon class="text-[18px]" name="logout" />
                     </Link>
                 </div>
             </div>
@@ -231,7 +231,7 @@ const dotClass = computed(() => {
                 <div ref="routerRoot" class="relative rounded-lg bg-well p-3" :class="collapsed ? 'flex justify-center p-2' : ''">
                     <template v-if="collapsed">
                         <button type="button" class="text-cyan" v-tip:right="currentSession?.name || 'Ganti router'" @click="routerOpen = !routerOpen">
-                            <span class="material-symbols-outlined text-[22px]">router</span>
+                            <Icon class="text-[22px]" name="router" />
                         </button>
                         <MenuPanel :open="routerOpen" class="absolute top-0 left-full z-50 ml-2 w-56 origin-top-left rounded-lg bg-menu p-2 shadow-md ring-1 ring-edge">
                             <div class="flex flex-col gap-1">
@@ -254,7 +254,7 @@ const dotClass = computed(() => {
                     <div class="flex items-center justify-between gap-2">
                         <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Active router</p>
                         <button type="button" class="text-mute" v-tip="'Ganti router'" @click="routerOpen = !routerOpen">
-                            <span class="material-symbols-outlined text-[18px] transition-transform duration-200" :class="routerOpen ? 'rotate-180' : ''">expand_more</span>
+                            <Icon class="text-[18px] transition-transform duration-200" :class="routerOpen ? 'rotate-180' : ''" name="expand_more" />
                         </button>
                     </div>
                     <p class="mt-1 truncate text-[15px] font-semibold">{{ currentSession?.name || pulse?.system?.board || 'MikroTik' }}</p>
@@ -276,9 +276,9 @@ const dotClass = computed(() => {
                     </div>
                     </MenuPanel>
                     <div class="mt-2 flex items-center justify-between gap-1.5 font-mono text-[11px] whitespace-nowrap text-mist">
-                        <span class="inline-flex min-w-0 items-center gap-1"><span class="material-symbols-outlined shrink-0 text-[14px] text-cyan">schedule</span><span class="truncate">{{ formatUptime(pulse?.system?.uptime) }}</span></span>
-                        <span class="inline-flex shrink-0 items-center gap-1"><span class="material-symbols-outlined text-[14px] text-ok">memory</span>{{ pulse?.system?.cpu_load ?? '–' }}%</span>
-                        <span class="inline-flex shrink-0 items-center gap-1"><span class="material-symbols-outlined text-[14px] text-warn">thermostat</span>{{ pulse?.system?.temperature ?? '–' }}°C</span>
+                        <span class="inline-flex min-w-0 items-center gap-1"><Icon class="shrink-0 text-[14px] text-cyan" name="schedule" /><span class="truncate">{{ formatUptime(pulse?.system?.uptime) }}</span></span>
+                        <span class="inline-flex shrink-0 items-center gap-1"><Icon class="text-[14px] text-ok" name="memory" />{{ pulse?.system?.cpu_load ?? '–' }}%</span>
+                        <span class="inline-flex shrink-0 items-center gap-1"><Icon class="text-[14px] text-warn" name="thermostat" />{{ pulse?.system?.temperature ?? '–' }}°C</span>
                     </div>
                     </template>
                 </div>
@@ -295,7 +295,7 @@ const dotClass = computed(() => {
                         :class="[collapsed ? 'justify-center px-0' : 'px-3', current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper']"
                         v-tip:right="collapsed ? link.label : ''"
                     >
-                        <span class="material-symbols-outlined text-[20px]">{{ link.icon }}</span>
+                        <Icon class="text-[20px]" :name="link.icon" />
                         <span v-if="!collapsed">{{ link.label }}</span>
                     </Link>
                 </nav>
@@ -316,7 +316,7 @@ const dotClass = computed(() => {
                                 <p class="truncate text-xs font-semibold">{{ page.props.auth.user?.name }}</p>
                                 <p class="truncate font-mono text-[11px] text-mute">{{ page.props.auth.user?.email }}</p>
                             </div>
-                            <span class="material-symbols-outlined shrink-0 text-[18px] text-mute transition-transform duration-200" :class="profileOpen ? 'rotate-180' : ''">expand_more</span>
+                            <Icon class="shrink-0 text-[18px] text-mute transition-transform duration-200" :class="profileOpen ? 'rotate-180' : ''" name="expand_more" />
                         </template>
                     </button>
                     <MenuPanel :open="profileOpen" :inline="!collapsed" :class="collapsed ? 'absolute bottom-0 left-full z-50 mb-0 ml-2 w-52 origin-bottom-left rounded-lg bg-menu shadow-md ring-1 ring-edge' : ''">
@@ -326,7 +326,7 @@ const dotClass = computed(() => {
                                 class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-hover"
                                 :class="current.startsWith('/pengaturan') ? 'font-semibold text-paper' : ''"
                             >
-                                <span class="material-symbols-outlined text-[18px]">settings</span>
+                                <Icon class="text-[18px]" name="settings" />
                                 Pengaturan
                             </Link>
                             <Link href="/logout" method="post" as="button" class="block w-full px-3 py-2.5 text-left text-sm hover:bg-hover">

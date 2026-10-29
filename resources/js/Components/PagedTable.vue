@@ -137,7 +137,7 @@ function sortOf(id) {
     <div>
         <div class="flex flex-wrap items-center gap-2 px-3 py-2">
             <label class="relative min-w-48 flex-1">
-                <span class="material-symbols-outlined pointer-events-none absolute top-1.5 left-2 text-[16px] text-mute">search</span>
+                <Icon class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[15px] text-mute" name="search" />
                 <input
                     v-model="search"
                     type="search"
@@ -171,12 +171,12 @@ function sortOf(id) {
                         {{ size }}
                     </button>
                 </div>
-                <button type="button" class="p-1 text-mist disabled:opacity-30" :disabled="currentPage <= 1" @click="shift(-1)">
-                    <span class="material-symbols-outlined text-[18px]">chevron_left</span>
+                <button type="button" class="p-1 text-mist disabled:opacity-30" aria-label="Halaman sebelumnya" :disabled="currentPage <= 1" @click="shift(-1)">
+                    <Icon class="text-[18px]" name="chevron_left" />
                 </button>
                 <span class="font-mono text-[11px] text-mist">{{ currentPage }} / {{ pageCount }}</span>
-                <button type="button" class="p-1 text-mist disabled:opacity-30" :disabled="currentPage >= pageCount" @click="shift(1)">
-                    <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                <button type="button" class="p-1 text-mist disabled:opacity-30" aria-label="Halaman berikutnya" :disabled="currentPage >= pageCount" @click="shift(1)">
+                    <Icon class="text-[18px]" name="chevron_right" />
                 </button>
                 <span class="font-mono text-[11px] text-mute">{{ prepared.length }}</span>
             </div>

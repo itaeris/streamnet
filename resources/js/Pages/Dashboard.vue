@@ -319,7 +319,7 @@ const visibleIfaces = (live, query) => {
         <section class="mt-3">
             <div class="flex flex-wrap items-center justify-between gap-2">
                 <div class="flex items-center gap-2 text-[15px] font-semibold">
-                    <span class="material-symbols-outlined text-[18px] text-cyan">developer_board</span>
+                    <Icon class="text-[18px] text-cyan" name="developer_board" />
                     Chassis port matrix
                 </div>
                 <div class="flex flex-wrap gap-3 font-mono text-[11px] text-mute">

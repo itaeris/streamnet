@@ -5,6 +5,7 @@ import AppLayout from '../Layouts/AppLayout.vue';
 import PagedTable from '../Components/PagedTable.vue';
 import PreviewBinder from '../Components/PreviewBinder.vue';
 import PulseWatch from '../Components/PulseWatch.vue';
+import SegmentTabs from '../Components/SegmentTabs.vue';
 import { live as boardLive, ranges, refreshId } from '../composables/useBoardTime';
 import { useBoardPulse } from '../composables/usePulse';
 import { usePreview } from '../composables/usePreview';
@@ -146,18 +147,7 @@ function tone(entry) {
             <span class="rounded px-2 py-0.5 font-mono text-[11px]" :class="boardLive || refreshId !== 'off' ? 'bg-ok/10 text-ok' : 'bg-tile text-mute'">{{ boardLive ? 'LIVE' : refreshId === 'off' ? 'PAUSED' : refreshId.toUpperCase() }}</span>
         </div>
 
-        <div class="mt-3 flex flex-wrap gap-1">
-            <button
-                v-for="name in topics"
-                :key="name"
-                type="button"
-                class="rounded px-2.5 py-1 font-mono text-[11px]"
-                :class="topic === name ? 'bg-cyan-2 font-semibold text-[#003640]' : 'bg-tile text-mist'"
-                @click="topic = name"
-            >
-                {{ name }}
-            </button>
-        </div>
+        <SegmentTabs v-model="topic" class="mt-3" :options="topics" />
 
         <div class="noc-card mt-3 overflow-hidden bg-sink">
             <PagedTable :rows="visible(query)" :text="logText" :label="logLabel" :time="logTime" default-sort="latest" placeholder="Cari pesan log...">

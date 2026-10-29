@@ -6,6 +6,7 @@ import LiveRate from '../Components/LiveRate.vue';
 import PagedTable from '../Components/PagedTable.vue';
 import SortHead from '../Components/SortHead.vue';
 import PreviewBinder from '../Components/PreviewBinder.vue';
+import SegmentTabs from '../Components/SegmentTabs.vue';
 import { live as boardLive, ranges } from '../composables/useBoardTime';
 import { useBoardPulse } from '../composables/usePulse';
 import { usePreview } from '../composables/usePreview';
@@ -329,18 +330,7 @@ const sortColumns = [
 
         <p class="mt-3 font-mono text-[11px] text-mute">{{ rangeLabel }} · last seen</p>
 
-        <div class="mt-3 flex flex-wrap gap-1">
-            <button
-                v-for="filter in filters"
-                :key="filter"
-                type="button"
-                class="rounded px-2.5 py-1 font-mono text-[11px] capitalize"
-                :class="status === filter ? 'bg-cyan-2 font-semibold text-[#003640]' : 'bg-tile text-mist'"
-                @click="status = filter"
-            >
-                {{ filter }}
-            </button>
-        </div>
+        <SegmentTabs v-model="status" class="mt-3" :options="filters" />
 
         <section class="noc-card mt-3 overflow-x-auto">
             <PagedTable :rows="rows(live, query)" :text="leaseText" :label="leaseLabel" :time="leaseTime" :columns="sortColumns" default-sort="seen" placeholder="Cari IP, MAC, host...">

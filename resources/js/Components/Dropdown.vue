@@ -50,7 +50,7 @@ onBeforeUnmount(() => {
             @click="open = !open"
         >
             <span class="truncate">{{ current }}</span>
-            <span class="material-symbols-outlined shrink-0 text-[18px] text-mute transition-transform duration-200" :class="open ? 'rotate-180' : ''">expand_more</span>
+            <Icon class="shrink-0 text-[18px] text-mute transition-transform duration-200" :class="open ? 'rotate-180' : ''" name="expand_more" />
         </button>
         <MenuPanel :open="open" class="absolute z-30 mt-1 max-h-64 w-full origin-top overflow-y-auto rounded-lg border border-edge bg-menu py-1 shadow-xl">
             <button
