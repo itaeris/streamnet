@@ -18,7 +18,7 @@ class ChooseMikrotikSession
             return $next($request);
         }
 
-        if ($request->is('sesi', 'pengaturan', 'pengaturan/*', 'logout', 'up')) {
+        if ($request->is('sesi', 'sesi/*', 'pengaturan', 'pengaturan/*', 'logout', 'up')) {
             return $next($request);
         }
 

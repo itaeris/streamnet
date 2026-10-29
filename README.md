@@ -76,17 +76,17 @@ Variabel `MIKROTIK_*` hanya membuat **sesi pertama**, dan hanya kalau belum ada 
 | `MIKROTIK_CONNECTION_WARNING` | Ambang conntrack peringatan. |
 | `MIKROTIK_CONNECTION_CRITICAL` | Ambang conntrack kritis. |
 
-Router berikutnya ditambah di `/pengaturan`. Protokol **API** memakai port 8728 (API-SSL 8729). Itu protokol biner MikroTik, bukan HTTP. REST HTTP/HTTPS hanya dipakai kalau service `www` memang terbuka, biasanya port 80, dan alamatnya berakhiran `/rest`. Port 8728 yang tersimpan sebagai HTTP tetap dibaca sebagai API.
+Daftar sesi ada di `/sesi`. Pengaturan satu router (host, protokol, API UniFi) ada di `/sesi/{nama sesi}`, misalnya `/sesi/AERIS%20%7C%20FTI`. Sesi baru ditambah di `/sesi/baru`. Protokol **API** memakai port 8728 (API-SSL 8729). Itu protokol biner MikroTik, bukan HTTP. REST HTTP/HTTPS hanya dipakai kalau service `www` memang terbuka, biasanya port 80, dan alamatnya berakhiran `/rest`. Port 8728 yang tersimpan sebagai HTTP tetap dibaca sebagai API.
 
 Password tidak dikirim balik ke halaman. Saat mengubah sesi, kosongkan password kalau tidak ingin menggantinya.
 
-Router yang sedang dibuka dipilih dari kartu **Active router** di sidebar, atau tombol **Pantau** di Pengaturan. Pilihan itu tersimpan di sesi login. Semua halaman (ringkasan, trafik, DHCP, firewall, log) mengikuti router yang dipilih. Menghapus sesi ikut menghapus sampelnya.
+Router yang sedang dibuka dipilih dari kartu di `/sesi`, atau dari kartu **Active router** di sidebar. Pilihan itu tersimpan di sesi login. Semua halaman (ringkasan, trafik, DHCP, firewall, log) mengikuti router yang dipilih. Menghapus sesi ikut menghapus sampelnya.
 
 Port API atau REST router harus bisa dijangkau dari mesin yang menjalankan `mikrotik:watch`. User router cukup read-only untuk `system`, `interface`, `ip/dhcp-server`, `ip/firewall`, `log`, dan `user/active`.
 
 ## UniFi
 
-Setelah masuk, pilih sesi MikroTik di `/sesi` sebelum membuka konsol. Menu **Access Points** membaca UniFi Network Integration API (`/proxy/network/integration/v1`). API key disimpan terenkripsi per sesi di **Pengaturan → UniFi**, jadi sesi router lain tidak memakai console yang sama. Buat API key di UniFi Network → Settings → Control Plane → Integrations.
+Setelah masuk, pilih sesi MikroTik di `/sesi` sebelum membuka konsol. Menu **Access Points** membaca UniFi Network Integration API (`/proxy/network/integration/v1`). API key disimpan terenkripsi di pengaturan sesi itu (`/sesi/{nama}`), jadi sesi router lain tidak memakai console yang sama. Buat API key di UniFi Network → Settings → Control Plane → Integrations.
 
 Kalau belum dihubungkan atau console tidak bisa dijangkau, halaman Access Points menampilkan "Belum terhubung" dengan tautan ke pengaturan.
 

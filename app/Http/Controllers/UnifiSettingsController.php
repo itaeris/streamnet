@@ -2,35 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MikrotikSession;
 use App\Models\UnifiConnection;
-use App\Services\AnalyticsQuery;
 use App\Services\Mikrotik\CurrentMikrotikSession;
 use App\Services\Unifi\UnifiClient;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class UnifiSettingsController extends Controller
 {
-    public function show(CurrentMikrotikSession $current, AnalyticsQuery $analytics, UnifiClient $unifi): Response
-    {
-        $active = $current->resolve();
-        $connection = $active ? UnifiConnection::forSession($active->id) : null;
-
-        return Inertia::render('Settings', [
-            'section' => 'unifi',
-            'pulse' => $active ? $analytics->pulse($active->id) : null,
-            'unifi' => [
-                'url' => $connection?->url,
-                'site' => $connection?->site,
-                'verify_tls' => $connection?->verify_tls ?? true,
-                'has_key' => $connection !== null,
-            ],
-            'unifiStatus' => fn () => $this->status($unifi),
-        ]);
-    }
-
     public function update(Request $request, CurrentMikrotikSession $current, UnifiClient $unifi): RedirectResponse
     {
         $active = $current->resolve();
@@ -38,7 +18,18 @@ class UnifiSettingsController extends Controller
             return redirect()->route('sites');
         }
 
-        $connection = UnifiConnection::forSession($active->id);
+        return $this->save($request, $active, $unifi);
+    }
+
+    public function saveNamed(Request $request, string $session, UnifiClient $unifi): RedirectResponse
+    {
+        return $this->save($request, $this->named($session), $unifi);
+    }
+
+    public function save(Request $request, MikrotikSession $session, UnifiClient $unifi): RedirectResponse
+    {
+        $unifi->useSession($session->id);
+        $connection = UnifiConnection::forSession($session->id);
         $data = $request->validate([
             'url' => ['required', 'url:https,http', 'max:255'],
             'api_key' => [$connection ? 'nullable' : 'required', 'string', 'max:255'],
@@ -57,28 +48,49 @@ class UnifiSettingsController extends Controller
             unset($data['api_key']);
         }
 
-        $data['mikrotik_session_id'] = $active->id;
+        $data['mikrotik_session_id'] = $session->id;
         $connection ? $connection->update($data) : UnifiConnection::query()->create($data);
         $unifi->forget();
 
-        return back();
+        return redirect()->route('sites.show', ['session' => $session->name]);
     }
 
     public function destroy(CurrentMikrotikSession $current, UnifiClient $unifi): RedirectResponse
     {
         $active = $current->resolve();
-        if ($active) {
-            UnifiConnection::query()->where('mikrotik_session_id', $active->id)->delete();
+        if (! $active) {
+            return redirect()->route('sites');
         }
+
+        return $this->disconnect($active, $unifi);
+    }
+
+    public function disconnectNamed(string $session, UnifiClient $unifi): RedirectResponse
+    {
+        return $this->disconnect($this->named($session), $unifi);
+    }
+
+    public function disconnect(MikrotikSession $session, UnifiClient $unifi): RedirectResponse
+    {
+        $unifi->useSession($session->id);
+        UnifiConnection::query()->where('mikrotik_session_id', $session->id)->delete();
         $unifi->forget();
 
-        return back();
+        return redirect()->route('sites.show', ['session' => $session->name]);
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function status(UnifiClient $unifi): array
+    private function named(string $session): MikrotikSession
+    {
+        return MikrotikSession::query()->where('name', $session)->firstOrFail();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function status(UnifiClient $unifi): array
     {
         $snapshot = $unifi->snapshot();
         if (! ($snapshot['ok'] ?? false)) {

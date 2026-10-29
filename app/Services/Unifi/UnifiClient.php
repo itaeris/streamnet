@@ -18,6 +18,14 @@ class UnifiClient
 
     private ?UnifiConnection $connection = null;
 
+    private ?int $forcedSessionId = null;
+
+    public function useSession(int $sessionId): void
+    {
+        $this->forcedSessionId = $sessionId;
+        $this->connection = null;
+    }
+
     public function configured(): bool
     {
         return $this->connection() !== null;
@@ -46,7 +54,7 @@ class UnifiClient
 
     private function sessionId(): ?int
     {
-        $id = app(CurrentMikrotikSession::class)->resolve()?->id;
+        $id = $this->forcedSessionId ?? app(CurrentMikrotikSession::class)->resolve()?->id;
 
         return $id ? (int) $id : null;
     }

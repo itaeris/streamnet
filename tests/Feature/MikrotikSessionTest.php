@@ -31,7 +31,7 @@ class MikrotikSessionTest extends TestCase
                 'wan_interface' => 'ether1',
                 'enabled' => true,
             ])
-            ->assertRedirect('/pengaturan/sesi');
+            ->assertRedirect('/sesi/Cabang');
 
         $session = MikrotikSession::query()->where('host', '10.20.30.1')->first();
         $this->assertNotNull($session);
@@ -39,7 +39,7 @@ class MikrotikSessionTest extends TestCase
         $this->assertNotSame($password, $session->getRawOriginal('password'));
 
         $this->actingAs($user)
-            ->get('/pengaturan/sesi')
+            ->get('/sesi/Cabang')
             ->assertOk()
             ->assertDontSee($password, false);
     }
@@ -65,7 +65,7 @@ class MikrotikSessionTest extends TestCase
                 'password' => '',
                 'enabled' => true,
             ])
-            ->assertRedirect('/pengaturan/sesi');
+            ->assertRedirect('/sesi/'.rawurlencode('Pusat HO'));
 
         $session->refresh();
         $this->assertSame('Pusat HO', $session->name);
@@ -96,6 +96,14 @@ class MikrotikSessionTest extends TestCase
                 ->component('Sites', false)
                 ->where('sessions.0.name', 'AERIS | FTI')
                 ->where('sessions.0.unifi', false));
+
+        $this->actingAs($user)
+            ->get('/sesi/'.rawurlencode('AERIS | FTI'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('SessionSettings', false)
+                ->where('session.name', 'AERIS | FTI')
+                ->where('unifi.has_key', false));
     }
 
     public function test_activating_a_session_selects_it_on_the_dashboard(): void
@@ -168,7 +176,7 @@ class MikrotikSessionTest extends TestCase
                 'wan_interface' => 'ether1',
                 'enabled' => true,
             ])
-            ->assertRedirect('/pengaturan/sesi');
+            ->assertRedirect('/sesi/Rumah');
 
         $session = MikrotikSession::query()->where('host', '20.20.20.1')->first();
         $this->assertNotNull($session);

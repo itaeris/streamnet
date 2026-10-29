@@ -12,6 +12,7 @@ use App\Http\Controllers\MikrotikSessionController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\UnifiSettingsController;
 use App\Http\Controllers\UserController;
+use App\Services\Mikrotik\CurrentMikrotikSession;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -21,6 +22,13 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/sesi', [MikrotikSessionController::class, 'sites'])->name('sites');
+    Route::get('/sesi/baru', [MikrotikSessionController::class, 'create'])->name('sites.create');
+    Route::post('/sesi', [MikrotikSessionController::class, 'store'])->name('sites.store');
+    Route::put('/sesi/{session}/unifi', [UnifiSettingsController::class, 'saveNamed'])->where('session', '.+')->name('sites.unifi.update');
+    Route::delete('/sesi/{session}/unifi', [UnifiSettingsController::class, 'disconnectNamed'])->where('session', '.+')->name('sites.unifi.destroy');
+    Route::put('/sesi/{session}', [MikrotikSessionController::class, 'updateNamed'])->where('session', '.+')->name('sites.update');
+    Route::delete('/sesi/{session}', [MikrotikSessionController::class, 'destroyNamed'])->where('session', '.+')->name('sites.destroy');
+    Route::get('/sesi/{session}', [MikrotikSessionController::class, 'edit'])->where('session', '.+')->name('sites.show');
     Route::get('/', DashboardController::class)->name('dashboard');
     Route::get('/bandwidth', BandwidthController::class)->name('bandwidth');
     Route::get('/dhcp', DhcpController::class)->name('dhcp');
@@ -35,13 +43,19 @@ Route::middleware('auth')->group(function () {
     Route::get('/logs', LogController::class)->name('logs');
     Route::get('/security', SecurityController::class)->name('security');
     Route::get('/pengaturan', [MikrotikSessionController::class, 'account'])->name('settings');
-    Route::get('/pengaturan/sesi', [MikrotikSessionController::class, 'index'])->name('settings.sessions');
+    Route::get('/pengaturan/sesi', fn () => redirect()->route('sites'))->name('settings.sessions');
     Route::put('/pengaturan/password', [LoginController::class, 'updatePassword'])->name('settings.password');
     Route::get('/pengaturan/pengguna', [UserController::class, 'index'])->name('settings.users');
     Route::post('/pengaturan/pengguna', [UserController::class, 'store'])->name('settings.users.store');
     Route::put('/pengaturan/pengguna/{user}', [UserController::class, 'update'])->name('settings.users.update');
     Route::delete('/pengaturan/pengguna/{user}', [UserController::class, 'destroy'])->name('settings.users.destroy');
-    Route::get('/pengaturan/unifi', [UnifiSettingsController::class, 'show'])->name('settings.unifi');
+    Route::get('/pengaturan/unifi', function (CurrentMikrotikSession $current) {
+        $active = $current->resolve();
+
+        return $active
+            ? redirect()->route('sites.show', ['session' => $active->name])
+            : redirect()->route('sites');
+    })->name('settings.unifi');
     Route::put('/pengaturan/unifi', [UnifiSettingsController::class, 'update'])->name('settings.unifi.update');
     Route::delete('/pengaturan/unifi', [UnifiSettingsController::class, 'destroy'])->name('settings.unifi.destroy');
     Route::post('/pengaturan/sesi', [MikrotikSessionController::class, 'store'])->name('settings.sessions.store');

@@ -42,48 +42,54 @@ const { theme, toggleTheme } = useTheme();
                     <h1 class="text-2xl font-semibold">Sesi</h1>
                     <p class="mt-1 text-sm text-mist">Masuk ke router yang ingin dipantau. API UniFi mengikuti sesi yang dipilih.</p>
                 </div>
-                <Link href="/pengaturan/sesi" class="inline-flex h-10 items-center gap-2 rounded-full bg-tile px-4 text-sm font-semibold text-paper">
-                    <Icon class="text-[18px]" name="settings" />
-                    Kelola sesi
+                <Link href="/sesi/baru" class="inline-flex h-10 items-center gap-2 rounded-full bg-tile px-4 text-sm font-semibold text-paper">
+                    <Icon class="text-[18px]" name="add" />
+                    Tambah sesi
                 </Link>
             </div>
 
             <div v-if="sessions.length" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <Link
-                    v-for="session in sessions"
-                    :key="session.id"
-                    :href="`/pengaturan/sesi/${session.id}/aktif`"
-                    method="post"
-                    as="button"
-                    class="noc-card p-4 text-left transition hover:bg-hover"
-                >
-                    <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                            <p class="truncate text-[17px] font-semibold">{{ session.identity || session.name }}</p>
-                            <p class="mt-1 flex items-center gap-1.5 text-sm text-mist">
-                                <span class="size-2 rounded-full" :class="session.online ? 'bg-ok' : 'bg-mute'" />
-                                {{ session.online ? 'MikroTik online' : (session.enabled ? 'Belum ada sampel' : 'Tidak dipantau') }}
-                            </p>
+                <article v-for="session in sessions" :key="session.id" class="noc-card p-4">
+                    <Link
+                        :href="`/pengaturan/sesi/${session.id}/aktif`"
+                        method="post"
+                        as="button"
+                        class="block w-full text-left"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="truncate text-[17px] font-semibold">{{ session.identity || session.name }}</p>
+                                <p class="mt-1 flex items-center gap-1.5 text-sm text-mist">
+                                    <span class="size-2 rounded-full" :class="session.online ? 'bg-ok' : 'bg-mute'" />
+                                    {{ session.online ? 'MikroTik online' : (session.enabled ? 'Belum ada sampel' : 'Tidak dipantau') }}
+                                </p>
+                            </div>
+                            <Icon class="shrink-0 text-[20px] text-mute" name="arrow_forward" />
                         </div>
-                        <Icon class="shrink-0 text-[20px] text-mute" name="arrow_forward" />
+                        <div class="mt-4 h-2 overflow-hidden rounded-full bg-tile">
+                            <div class="h-full rounded-full" :class="session.online ? 'w-full bg-ok' : 'w-0'" />
+                        </div>
+                        <div class="mt-3 flex items-center justify-between gap-2 font-mono text-[11px] text-mute">
+                            <span class="truncate">{{ session.host }}</span>
+                            <span class="shrink-0">{{ session.sampled_label || '' }}</span>
+                        </div>
+                    </Link>
+                    <div class="mt-3 flex items-center justify-between gap-2">
+                        <p class="text-xs" :class="session.unifi ? 'text-ok' : 'text-mute'">
+                            {{ session.unifi ? 'UniFi terhubung' : 'UniFi belum dihubungkan' }}
+                        </p>
+                        <Link :href="`/sesi/${encodeURIComponent(session.name)}`" class="inline-flex items-center gap-1 text-xs font-semibold text-cyan">
+                            <Icon class="text-[14px]" name="settings" />
+                            Pengaturan
+                        </Link>
                     </div>
-                    <div class="mt-4 h-2 overflow-hidden rounded-full bg-tile">
-                        <div class="h-full rounded-full" :class="session.online ? 'w-full bg-ok' : 'w-0'" />
-                    </div>
-                    <div class="mt-3 flex items-center justify-between gap-2 font-mono text-[11px] text-mute">
-                        <span class="truncate">{{ session.host }}</span>
-                        <span class="shrink-0">{{ session.sampled_label || '' }}</span>
-                    </div>
-                    <p class="mt-3 text-xs" :class="session.unifi ? 'text-ok' : 'text-mute'">
-                        {{ session.unifi ? 'UniFi terhubung' : 'UniFi belum dihubungkan' }}
-                    </p>
-                </Link>
+                </article>
             </div>
 
             <article v-else class="noc-card px-6 py-14 text-center">
                 <p class="text-[15px] font-semibold">Belum ada sesi</p>
                 <p class="mt-2 text-sm text-mist">Tambahkan router MikroTik dulu, lalu masuk ke sesi itu.</p>
-                <Link href="/pengaturan/sesi" class="mt-5 inline-flex h-10 items-center rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640]">Tambah sesi</Link>
+                <Link href="/sesi/baru" class="mt-5 inline-flex h-10 items-center rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640]">Tambah sesi</Link>
             </article>
         </main>
     </div>

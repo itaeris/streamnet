@@ -148,7 +148,7 @@ class AccessPointTest extends TestCase
         $session = $this->router();
 
         $this->actingAs($user)->withSession(['mikrotik_session_id' => $session->id])
-            ->put('/pengaturan/unifi', [
+            ->put('/sesi/'.$session->name.'/unifi', [
                 'url' => 'https://unifi.example.test/',
                 'api_key' => 'secret-unifi-key',
                 'site' => '',
@@ -164,13 +164,13 @@ class AccessPointTest extends TestCase
         $this->assertNotSame('secret-unifi-key', $connection->getRawOriginal('api_key'));
 
         $this->actingAs($user)
-            ->put('/pengaturan/unifi', ['url' => 'https://unifi.example.test', 'api_key' => '', 'verify_tls' => false])
+            ->put('/sesi/'.$session->name.'/unifi', ['url' => 'https://unifi.example.test', 'api_key' => '', 'verify_tls' => false])
             ->assertSessionHasNoErrors();
         $this->assertSame('secret-unifi-key', $connection->fresh()->api_key);
         $this->assertFalse($connection->fresh()->verify_tls);
 
         $this->actingAs($user)
-            ->get('/pengaturan/unifi')
+            ->get('/sesi/'.$session->name)
             ->assertOk()
             ->assertDontSee('secret-unifi-key', false);
     }

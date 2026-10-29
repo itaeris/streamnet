@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../Layouts/AppLayout.vue';
 import DataTable from '../Components/DataTable.vue';
 import LiveRate from '../Components/LiveRate.vue';
@@ -20,6 +20,12 @@ const show = (value) => (value === null || value === undefined || value === '' ?
 const pct = (value) => (value === null || value === undefined ? '–' : `${Math.round(Number(value))}%`);
 const badge = 'rounded px-1.5 py-0.5 font-mono text-[11px]';
 
+const page = usePage();
+const sessionSettingsHref = computed(() => {
+    const current = (page.props.sessions ?? []).find((item) => item.id === page.props.currentSessionId);
+
+    return current?.name ? `/sesi/${encodeURIComponent(current.name)}` : '/sesi';
+});
 const devices = computed(() => (props.unifi?.devices ?? []).filter((device) => device.access_point));
 const clients = computed(() => props.unifi?.clients ?? []);
 const wireless = computed(() => clients.value.filter((client) => client.type === 'wireless'));
@@ -267,7 +273,7 @@ const clientColumns = [
             {{ unifi?.configured ? 'Console UniFi sesi ini belum bisa dihubungi. Cek alamat, API key, atau koneksi ke console.' : 'Sesi MikroTik ini belum punya API UniFi. Sambungkan console-nya di pengaturan.' }}
         </p>
         <p v-if="unifi?.configured && unifi?.error" class="mt-2 font-mono text-[11px] text-mute">{{ unifi.error }}</p>
-        <Link href="/pengaturan/unifi" class="mt-5 inline-flex h-10 items-center gap-2 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640]">
+        <Link :href="sessionSettingsHref" class="mt-5 inline-flex h-10 items-center gap-2 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640]">
             <Icon class="text-[16px]" name="settings" />
             {{ unifi?.configured ? 'Periksa pengaturan UniFi' : 'Hubungkan di Pengaturan' }}
         </Link>
