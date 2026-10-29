@@ -15,7 +15,7 @@ const props = defineProps({
 
 const search = ref('');
 const sort = ref(props.defaultSort);
-const sortDir = ref('desc');
+const sortDir = ref(props.columns.find((column) => column.id === props.defaultSort)?.first === 'asc' ? 'asc' : 'desc');
 const pageSize = ref(100);
 const page = ref(1);
 const sizes = [5, 20, 50, 100];
