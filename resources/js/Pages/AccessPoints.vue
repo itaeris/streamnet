@@ -6,7 +6,7 @@ import DataTable from '../Components/DataTable.vue';
 import LiveRate from '../Components/LiveRate.vue';
 import PreviewBinder from '../Components/PreviewBinder.vue';
 import { usePreview } from '../composables/usePreview';
-import { formatRate, formatSeconds } from '../lib/format';
+import { formatBytes, formatRate, formatSeconds } from '../lib/format';
 
 defineOptions({ layout: AppLayout });
 
@@ -133,29 +133,81 @@ function clientKey(client) {
     return `wifi-client:${client.id}`;
 }
 
+const experienceLabel = (score) => {
+    if (score === null || score === undefined) {
+        return '';
+    }
+
+    return score >= 90 ? 'Excellent' : score >= 70 ? 'Good' : score >= 40 ? 'Fair' : 'Poor';
+};
+const experienceTone = (score) => ({ Excellent: 'ok', Good: 'warn', Fair: 'warn', Poor: 'danger' }[experienceLabel(score)]);
+const experienceClass = (score) => ({ ok: 'text-ok', warn: 'text-warn', danger: 'text-danger' }[experienceTone(score)] || 'text-mute');
+const technology = (client) => [client.standard, client.streams].filter(Boolean).join(', ');
+const channelText = (client) => (client.channel ? `${client.channel}${client.band ? ` (${client.band}${client.channel_width ? `, ${client.channel_width} MHz` : ''})` : ''}` : '');
+const macTail = (mac) => String(mac || '').slice(-5);
+const clientName = (client) => {
+    const name = client.name || client.display_name || client.hostname || client.mac || '';
+    const tail = macTail(client.mac);
+
+    return tail && name.endsWith(` ${tail}`) ? name.slice(0, -tail.length - 1) : name;
+};
+
 function clientPreview(client) {
+    const score = client.experience;
+
     return {
         key: clientKey(client),
         icon: 'devices',
-        title: client.name || client.mac || 'Klien',
+        title: clientName(client) || 'Klien',
         subtitle: client.mac || '',
         detail: client.ip || '',
-        status: { label: client.type || 'klien', tone: 'cyan' },
-        tabs: [{
-            id: 'overview',
-            icon: 'devices',
-            label: 'Klien',
-            hero: true,
-            sections: [{
-                rows: [
-                    { label: 'IP address', value: show(client.ip) },
-                    { label: 'MAC', value: show(client.mac) },
-                    { label: 'Access point', value: show(client.uplink), mono: false },
-                    { label: 'Tersambung', value: since(client.connected_at) },
-                    { label: 'Sejak', value: stamp(client.connected_at) },
+        status: score !== null && score !== undefined
+            ? { label: experienceLabel(score), tone: experienceTone(score) }
+            : { label: client.type || 'klien', tone: 'cyan' },
+        stream: client.down_bps !== undefined
+            ? { rx: Number(client.down_bps) || 0, tx: Number(client.up_bps) || 0, flows: null, at: props.unifi?.fetched_at ?? null }
+            : null,
+        tabs: [
+            {
+                id: 'overview',
+                icon: 'devices',
+                label: 'Klien',
+                hero: true,
+                metrics: [
+                    { label: 'Experience', value: score !== null && score !== undefined ? `${score}%` : '–', tone: experienceTone(score) },
+                    { label: 'Sinyal', value: client.signal ? `${client.signal} dBm` : '–', tone: client.signal ? (client.signal >= -67 ? 'ok' : client.signal >= -75 ? 'warn' : 'danger') : undefined },
+                    { label: 'Retry', value: client.retries !== null && client.retries !== undefined ? `${client.retries}%` : '–', tone: client.retries >= 25 ? 'danger' : client.retries >= 10 ? 'warn' : undefined },
                 ],
-            }],
-        }],
+                sections: [{
+                    rows: [
+                        { label: 'IP address', value: show(client.ip) },
+                        { label: 'MAC', value: show(client.mac) },
+                        { label: 'Vendor', value: show(client.vendor), mono: false },
+                        { label: 'Access point', value: show(client.uplink || client.uplink_name), mono: false },
+                        { label: 'WiFi', value: show(client.ssid), mono: false },
+                        { label: 'Total sesi', value: client.total_bytes ? formatBytes(client.total_bytes) : '–' },
+                        { label: 'Uptime', value: client.uptime ? formatSeconds(client.uptime) : since(client.connected_at) },
+                        { label: 'Tersambung sejak', value: stamp(client.connected_at) },
+                    ],
+                }],
+            },
+            {
+                id: 'radio',
+                icon: 'radio',
+                label: 'Radio',
+                sections: [{
+                    rows: [
+                        { label: 'Teknologi', value: show(technology(client)) },
+                        { label: 'Channel', value: show(channelText(client)) },
+                        { label: 'Sinyal', value: client.signal ? `${client.signal} dBm` : '–' },
+                        { label: 'Noise', value: client.noise ? `${client.noise} dBm` : '–' },
+                        { label: 'Link rate ↓', value: client.link_down ? formatRate(client.link_down) : '–' },
+                        { label: 'Link rate ↑', value: client.link_up ? formatRate(client.link_up) : '–' },
+                        { label: 'TX retry', value: client.retries !== null && client.retries !== undefined ? `${client.retries}%` : '–' },
+                    ],
+                }],
+            },
+        ],
     };
 }
 
@@ -186,11 +238,18 @@ const apColumns = [
 ];
 
 const clientColumns = [
-    { id: 'name', label: 'Nama', type: 'text', first: 'asc', get: (row) => row.name || '' },
-    { id: 'ip', label: 'IP', type: 'text', first: 'asc', get: (row) => row.ip || '', class: 'font-mono text-cyan' },
-    { id: 'mac', label: 'MAC', type: 'text', first: 'asc', get: (row) => row.mac || '', class: 'font-mono text-mist' },
-    { id: 'uplink', label: 'Access point', type: 'text', first: 'asc', get: (row) => row.uplink || '' },
-    { id: 'connected', label: 'Tersambung', type: 'number', first: 'desc', get: (row) => -(Date.parse(row.connected_at || '') || 0), show: (row) => since(row.connected_at), class: 'text-mist whitespace-nowrap' },
+    { id: 'name', label: 'Nama', type: 'text', first: 'asc', get: clientName },
+    { id: 'vendor', label: 'Vendor', type: 'text', first: 'asc', get: (row) => row.vendor || '', class: 'text-mist' },
+    { id: 'uplink', label: 'Connection', type: 'text', first: 'asc', get: (row) => row.uplink || row.uplink_name || '' },
+    { id: 'ssid', label: 'WiFi', type: 'text', first: 'asc', get: (row) => row.ssid || '', class: 'text-mist' },
+    { id: 'experience', label: 'Experience', type: 'number', first: 'desc', get: (row) => (row.experience ?? Number.NaN), show: (row) => experienceLabel(row.experience) },
+    { id: 'technology', label: 'Teknologi', type: 'text', first: 'asc', get: technology, class: 'text-mist whitespace-nowrap' },
+    { id: 'channel', label: 'Channel', type: 'text', first: 'asc', get: channelText, class: 'font-mono text-[12px] text-mist whitespace-nowrap' },
+    { id: 'ip', label: 'IP address', type: 'text', first: 'asc', get: (row) => row.ip || '', class: 'font-mono text-cyan' },
+    { id: 'down', label: 'Download', type: 'number', first: 'desc', get: (row) => Number(row.down_bps) || 0, show: (row) => formatRate(row.down_bps), class: 'font-mono text-cyan whitespace-nowrap' },
+    { id: 'up', label: 'Upload', type: 'number', first: 'desc', get: (row) => Number(row.up_bps) || 0, show: (row) => formatRate(row.up_bps), class: 'font-mono text-ok whitespace-nowrap' },
+    { id: 'total', label: 'Total sesi', type: 'number', first: 'desc', get: (row) => Number(row.total_bytes) || 0, show: (row) => (row.total_bytes ? formatBytes(row.total_bytes) : '–'), class: 'font-mono text-mist whitespace-nowrap' },
+    { id: 'uptime', label: 'Uptime', type: 'number', first: 'desc', get: (row) => (row.uptime ?? Number.NaN), show: (row) => (row.uptime ? formatSeconds(row.uptime) : since(row.connected_at)), class: 'text-mist whitespace-nowrap' },
 ];
 </script>
 
@@ -273,13 +332,30 @@ const clientColumns = [
             :rows="wireless"
             :columns="clientColumns"
             :row-key="(row) => row.id"
-            default-sort="uplink"
-            placeholder="Cari nama, IP, MAC, AP..."
+            default-sort="down"
+            placeholder="Cari nama, IP, MAC, AP, SSID..."
             empty="Tidak ada klien WiFi."
-            min-width="min-w-[48rem]"
+            min-width="min-w-[92rem]"
             clickable
             :is-active="(row) => isOpen(clientKey(row))"
             @open="(row) => open(clientPreview(row))"
-        />
+        >
+            <template #name="{ row }">
+                <span class="inline-flex items-center gap-2 whitespace-nowrap">
+                    <span class="size-1.5 shrink-0 rounded-full bg-ok" />
+                    {{ clientName(row) }}
+                    <span class="font-mono text-[11px] text-mute">{{ macTail(row.mac) }}</span>
+                </span>
+            </template>
+            <template #experience="{ row }">
+                <span :class="experienceClass(row.experience)">{{ experienceLabel(row.experience) || '–' }}</span>
+            </template>
+            <template #down="{ row }">
+                <span class="whitespace-nowrap">↓ <LiveRate :value="row.down_bps" /></span>
+            </template>
+            <template #up="{ row }">
+                <span class="whitespace-nowrap">↑ <LiveRate :value="row.up_bps" /></span>
+            </template>
+        </DataTable>
     </template>
 </template>

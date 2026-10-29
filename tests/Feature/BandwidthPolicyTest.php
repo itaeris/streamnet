@@ -125,6 +125,41 @@ class BandwidthPolicyTest extends TestCase
             && $request['max-limit'] === '270000000/270000000');
     }
 
+    public function test_incidents_export_to_excel_for_the_chosen_range(): void
+    {
+        $session = $this->router();
+        foreach ([now()->subHour(), now()->subDays(3)] as $index => $at) {
+            SecurityEvent::query()->create([
+                'mikrotik_session_id' => $session->id,
+                'occurred_at' => $at,
+                'severity' => 'info',
+                'category' => 'bandwidth',
+                'title' => 'Klien menyentuh batas bandwidth',
+                'detail' => "Klien {$index} (10.10.10.2{$index}) download 50.0 Mbps · 17% kapasitas",
+                'context' => ['kind' => 'Streaming video', 'client' => ['name' => "Klien {$index}", 'address' => "10.10.10.2{$index}", 'mac' => "AA:00:00:00:00:0{$index}", 'down' => 50000000, 'share' => 17]],
+            ]);
+        }
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get('/bandwidth-policy/incidents/export?range=today')
+            ->assertOk()
+            ->assertDownload();
+
+        $path = $response->baseResponse->getFile()->getPathname();
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($path) === true);
+        $workbook = $zip->getFromName('xl/workbook.xml');
+        $strings = $zip->getFromName('xl/sharedStrings.xml') ?: '';
+        $sheets = $zip->getFromName('xl/worksheets/sheet1.xml').$zip->getFromName('xl/worksheets/sheet2.xml');
+        $zip->close();
+
+        $this->assertStringContainsString('Rekap', $workbook);
+        $this->assertStringContainsString('Insiden', $workbook);
+        $this->assertStringContainsString('Klien 0', $strings.$sheets);
+        $this->assertStringNotContainsString('Klien 1', $strings.$sheets);
+        $this->assertStringContainsString('Streaming video', $strings.$sheets);
+    }
+
     public function test_client_limit_cannot_exceed_capacity(): void
     {
         $this->router();

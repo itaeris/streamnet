@@ -101,23 +101,101 @@ class UnifiClient
             $names[$device['id']] = $device['name'];
         }
 
+        $wifi = $this->activeClients((string) ($site['internalReference'] ?? 'default'));
+
         return [
             'ok' => true,
             'configured' => true,
             'site' => ['id' => $site['id'], 'name' => $site['name'] ?? 'Default'],
             'fetched_at' => now()->toIso8601String(),
             'devices' => $mappedDevices,
-            'clients' => array_map(fn (array $client) => [
-                'id' => (string) ($client['id'] ?? ''),
-                'name' => (string) ($client['name'] ?? ''),
-                'type' => strtolower((string) ($client['type'] ?? '')),
-                'ip' => (string) ($client['ipAddress'] ?? ''),
-                'mac' => (string) ($client['macAddress'] ?? ''),
-                'uplink_id' => (string) ($client['uplinkDeviceId'] ?? ''),
-                'uplink' => $names[$client['uplinkDeviceId'] ?? ''] ?? '',
-                'connected_at' => $client['connectedAt'] ?? null,
-            ], $clients),
+            'clients' => array_map(function (array $client) use ($names, $wifi) {
+                $mac = strtolower((string) ($client['macAddress'] ?? ''));
+
+                return [
+                    'id' => (string) ($client['id'] ?? ''),
+                    'name' => (string) ($client['name'] ?? ''),
+                    'type' => strtolower((string) ($client['type'] ?? '')),
+                    'ip' => (string) ($client['ipAddress'] ?? ''),
+                    'mac' => (string) ($client['macAddress'] ?? ''),
+                    'uplink_id' => (string) ($client['uplinkDeviceId'] ?? ''),
+                    'uplink' => $names[$client['uplinkDeviceId'] ?? ''] ?? '',
+                    'connected_at' => $client['connectedAt'] ?? null,
+                    ...($wifi[$mac] ?? []),
+                ];
+            }, $clients),
         ];
+    }
+
+    /**
+     * Radio-level detail per wireless client (SSID, experience, channel, live rates) from the
+     * Network application's v2 API, keyed by MAC. Missing on older consoles, so it is optional.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function activeClients(string $site): array
+    {
+        try {
+            $response = $this->prepare(Http::acceptJson())
+                ->get(rtrim((string) $this->connection()?->url, '/')."/proxy/network/v2/api/site/{$site}/clients/active");
+        } catch (Throwable) {
+            return [];
+        }
+
+        $rows = $response->successful() ? $response->json() : null;
+        if (! is_array($rows) || ! array_is_list($rows)) {
+            return [];
+        }
+
+        $mapped = [];
+        foreach ($rows as $row) {
+            $mac = strtolower((string) ($row['mac'] ?? ''));
+            if ($mac === '' || ($row['is_wired'] ?? false)) {
+                continue;
+            }
+
+            $mapped[$mac] = [
+                'display_name' => (string) ($row['display_name'] ?? ''),
+                'hostname' => (string) ($row['hostname'] ?? ''),
+                'vendor' => (string) ($row['oui'] ?? ''),
+                'ssid' => (string) ($row['essid'] ?? ''),
+                'experience' => isset($row['wifi_experience_score']) ? (int) $row['wifi_experience_score'] : null,
+                'standard' => $this->wifiStandard((string) ($row['radio_proto'] ?? '')),
+                'streams' => preg_match('/(\d+)/', (string) ($row['mimo'] ?? ''), $match) ? "{$match[1]}x{$match[1]}" : null,
+                'channel' => $row['channel'] ?? null,
+                'band' => match ((string) ($row['radio'] ?? '')) {
+                    'ng' => '2.4 GHz',
+                    'na' => '5 GHz',
+                    '6e' => '6 GHz',
+                    default => null,
+                },
+                'channel_width' => $row['channel_width'] ?? null,
+                'signal' => isset($row['signal']) ? (int) $row['signal'] : null,
+                'noise' => isset($row['noise']) ? (int) $row['noise'] : null,
+                'retries' => isset($row['wifi_tx_retries_percentage']) ? (float) $row['wifi_tx_retries_percentage'] : null,
+                'link_down' => isset($row['tx_rate']) ? (int) $row['tx_rate'] * 1000 : null,
+                'link_up' => isset($row['rx_rate']) ? (int) $row['rx_rate'] * 1000 : null,
+                'down_bps' => (int) round(((float) ($row['tx_bytes-r'] ?? 0)) * 8),
+                'up_bps' => (int) round(((float) ($row['rx_bytes-r'] ?? 0)) * 8),
+                'total_bytes' => (int) ($row['tx_bytes'] ?? 0) + (int) ($row['rx_bytes'] ?? 0),
+                'uptime' => isset($row['uptime']) ? (int) $row['uptime'] : null,
+                'uplink_name' => (string) ($row['last_uplink_name'] ?? ''),
+            ];
+        }
+
+        return $mapped;
+    }
+
+    private function wifiStandard(string $proto): ?string
+    {
+        return match ($proto) {
+            'be' => 'WiFi 7',
+            'ax', '6e' => 'WiFi 6',
+            'ac' => 'WiFi 5',
+            'ng', 'na', 'n' => 'WiFi 4',
+            'a', 'g', 'b' => 'Legacy',
+            default => null,
+        };
     }
 
     /**

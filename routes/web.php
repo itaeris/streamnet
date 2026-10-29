@@ -30,6 +30,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/bandwidth-policy', [BandwidthPolicyController::class, 'index'])->name('bandwidth-policy');
     Route::put('/bandwidth-policy', [BandwidthPolicyController::class, 'update'])->name('bandwidth-policy.update');
     Route::get('/bandwidth-policy/context', [BandwidthPolicyController::class, 'context'])->name('bandwidth-policy.context');
+    Route::get('/bandwidth-policy/incidents/export', [BandwidthPolicyController::class, 'export'])->name('bandwidth-policy.export');
     Route::get('/logs', LogController::class)->name('logs');
     Route::get('/security', SecurityController::class)->name('security');
     Route::get('/pengaturan', [MikrotikSessionController::class, 'account'])->name('settings');

@@ -4,9 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\DnsQuery;
 use App\Models\InterfaceSample;
-use App\Models\SecurityEvent;
 use App\Services\AnalyticsQuery;
 use App\Services\DnsActivity;
+use App\Services\IncidentReport;
 use App\Services\Mikrotik\CurrentMikrotikSession;
 use App\Services\Mikrotik\MikrotikClient;
 use Carbon\Carbon;
@@ -15,10 +15,11 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class BandwidthPolicyController extends Controller
 {
-    public function index(AnalyticsQuery $analytics, CurrentMikrotikSession $current): Response
+    public function index(AnalyticsQuery $analytics, CurrentMikrotikSession $current, IncidentReport $report): Response
     {
         $session = $current->resolve();
         $pulse = $analytics->pulse($session?->id);
@@ -38,16 +39,20 @@ class BandwidthPolicyController extends Controller
                     ->where('sampled_at', '>=', now()->subDay())
                     ->max('tx_bps'),
             ],
-            'incidents' => fn () => SecurityEvent::query()
-                ->where('mikrotik_session_id', $session?->id)
-                ->where('category', 'bandwidth')
-                ->where('occurred_at', '>=', now()->subDays(7))
-                ->orderByDesc('occurred_at')
-                ->limit(200)
-                ->get()
-                ->map->toPayload()
-                ->all(),
+            'incidents' => fn () => $report->rows($session?->id, now()->subDays(30), now()),
         ]);
+    }
+
+    public function export(Request $request, CurrentMikrotikSession $current, IncidentReport $report): BinaryFileResponse
+    {
+        $range = $request->validate(['range' => ['nullable', 'in:'.implode(',', array_keys(IncidentReport::RANGES))]])['range'] ?? '7d';
+        $window = $report->window($range);
+        $rows = $report->rows($current->resolve()?->id, $window['start'], $window['end']);
+        $path = $report->export($rows, $window['label']);
+
+        return response()
+            ->download($path, sprintf('insiden-bandwidth-%s-%s.xlsx', $range, now()->format('Ymd-His')))
+            ->deleteFileAfterSend();
     }
 
     public function context(Request $request, CurrentMikrotikSession $current, DnsActivity $dns): JsonResponse

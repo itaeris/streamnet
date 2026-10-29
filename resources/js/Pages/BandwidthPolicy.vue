@@ -48,7 +48,7 @@ const form = useForm({
 const confirming = ref(false);
 const tabOptions = computed(() => [
     { id: 'manage', label: 'Manage' },
-    { id: 'incidents', label: props.incidents.length ? `Insiden (${props.incidents.length})` : 'Insiden' },
+    { id: 'incidents', label: filteredIncidents.value.length ? `Insiden (${filteredIncidents.value.length})` : 'Insiden' },
     { id: 'settings', label: 'Settings' },
 ]);
 const storedTab = localStorage.getItem('bandwidthPolicy.tab');
@@ -201,7 +201,8 @@ function incidentKey(incident) {
 }
 
 function incidentAddress(incident) {
-    return incident.context?.client?.address
+    return incident.address
+        || incident.context?.client?.address
         || String(incident.detail || '').match(/\((\d{1,3}(?:\.\d{1,3}){3})\)/)?.[1]
         || '';
 }
@@ -215,19 +216,104 @@ function incidentLease(incident) {
 function incidentClient(incident) {
     const lease = incidentLease(incident);
 
-    return incident.context?.client?.name
+    return incident.name
+        || incident.context?.client?.name
         || String(incident.detail || '').split(' (')[0]
         || (lease ? nameOf(lease) : '')
         || incidentAddress(incident);
 }
 
 function incidentMac(incident) {
-    return incident.context?.client?.mac || incidentLease(incident)?.mac || '';
+    return incident.mac || incident.context?.client?.mac || incidentLease(incident)?.mac || '';
 }
 
 function incidentUsage(incident) {
+    if (incident.down !== null && incident.down !== undefined) {
+        return `↓ ${formatRate(incident.down)}${incident.share !== null && incident.share !== undefined ? ` · ${incident.share}% kapasitas` : ''}`;
+    }
+
     return String(incident.detail || '').replace(/^.*\)\s*/, '').replace(/^download\s*/, '↓ ');
 }
+
+const incidentRanges = [
+    { id: 'today', label: 'Hari ini' },
+    { id: 'yesterday', label: 'Kemarin' },
+    { id: '7d', label: '7 hari' },
+    { id: '30d', label: '30 hari' },
+];
+const incidentRange = ref(localStorage.getItem('bandwidthPolicy.range') || '7d');
+const incidentView = ref('list');
+watch(incidentRange, (value) => localStorage.setItem('bandwidthPolicy.range', value));
+
+const rangeLabel = computed(() => incidentRanges.find((item) => item.id === incidentRange.value)?.label ?? '7 hari');
+
+function rangeBounds(range) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    return {
+        today: [today, now],
+        yesterday: [new Date(today.getTime() - 86_400_000), today],
+        '7d': [new Date(now.getTime() - 7 * 86_400_000), now],
+        '30d': [new Date(now.getTime() - 30 * 86_400_000), now],
+    }[range] ?? [new Date(now.getTime() - 7 * 86_400_000), now];
+}
+
+const filteredIncidents = computed(() => {
+    const [start, end] = rangeBounds(incidentRange.value);
+
+    return props.incidents.filter((incident) => {
+        const at = new Date(String(incident.time || '').replace(' ', 'T'));
+
+        return at >= start && at < (incidentRange.value === 'yesterday' ? end : new Date(end.getTime() + 60_000));
+    });
+});
+
+const recap = computed(() => {
+    const groups = new Map();
+    for (const incident of filteredIncidents.value) {
+        const key = incidentAddress(incident) || incidentClient(incident);
+        if (!groups.has(key)) {
+            groups.set(key, []);
+        }
+        groups.get(key).push(incident);
+    }
+
+    return [...groups.values()].map((items) => {
+        const sorted = [...items].sort((left, right) => String(right.time).localeCompare(String(left.time)));
+        const rates = items.map((item) => Number(item.down)).filter((value) => Number.isFinite(value) && value > 0);
+        const kinds = {};
+        for (const item of items) {
+            if (item.kind && item.kind !== 'Tidak diketahui') {
+                kinds[item.kind] = (kinds[item.kind] ?? 0) + 1;
+            }
+        }
+
+        return {
+            latest: sorted[0],
+            name: incidentClient(sorted[0]),
+            address: incidentAddress(sorted[0]),
+            mac: items.map(incidentMac).find(Boolean) || '',
+            count: items.length,
+            max: rates.length ? Math.max(...rates) : null,
+            avg: rates.length ? rates.reduce((sum, value) => sum + value, 0) / rates.length : null,
+            first: sorted.at(-1)?.time || '',
+            last: sorted[0]?.time || '',
+            kind: Object.entries(kinds).sort((left, right) => right[1] - left[1])[0]?.[0] || '',
+        };
+    });
+});
+
+const recapColumns = [
+    { id: 'name', label: 'Klien', type: 'text', first: 'asc', get: (row) => row.name || '' },
+    { id: 'address', label: 'IP address', type: 'text', first: 'asc', get: (row) => row.address || '', class: 'font-mono text-cyan' },
+    { id: 'mac', label: 'MAC address', type: 'text', first: 'asc', get: (row) => row.mac || '', class: 'font-mono text-mist' },
+    { id: 'count', label: 'Insiden', type: 'number', first: 'desc', get: (row) => row.count, class: 'font-mono' },
+    { id: 'max', label: 'Tertinggi', type: 'number', first: 'desc', get: (row) => row.max ?? Number.NaN, show: (row) => (row.max ? formatRate(row.max) : '–'), class: 'font-mono text-cyan' },
+    { id: 'avg', label: 'Rata-rata', type: 'number', first: 'desc', get: (row) => row.avg ?? Number.NaN, show: (row) => (row.avg ? formatRate(row.avg) : '–'), class: 'font-mono text-mist' },
+    { id: 'last', label: 'Terakhir', type: 'text', first: 'desc', get: (row) => row.last, class: 'font-mono text-mist whitespace-nowrap' },
+    { id: 'kind', label: 'Dugaan penyebab', type: 'text', first: 'asc', get: (row) => row.kind || '', class: 'text-mist' },
+];
 
 const contexts = ref({});
 
@@ -358,8 +444,8 @@ function incidentPreview(incident) {
                 icon: 'history',
                 label: 'Riwayat klien',
                 sections: [{
-                    title: `${sameClient(props.incidents).length} insiden · 7 hari`,
-                    rows: sameClient(props.incidents).map((row) => ({ label: row.time || '–', value: String(row.detail || '').replace(/^.*download\s*/, '↓ '), mono: true })),
+                    title: `${sameClient(props.incidents).length} insiden · 30 hari`,
+                    rows: sameClient(props.incidents).map((row) => ({ label: row.time || '–', value: incidentUsage(row), mono: true })),
                 }],
             },
         ],
@@ -470,19 +556,50 @@ const steps = [
     </template>
 
     <template v-else-if="tab === 'incidents'">
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+            <SegmentTabs v-model="incidentRange" :options="incidentRanges" />
+            <SegmentTabs v-model="incidentView" :options="[{ id: 'list', label: 'Daftar' }, { id: 'recap', label: 'Rekap' }]" />
+            <a
+                :href="`/bandwidth-policy/incidents/export?range=${incidentRange}`"
+                class="ml-auto inline-flex h-10 items-center gap-2 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640]"
+            >
+                <Icon class="text-[16px]" name="download" />
+                Export Excel
+            </a>
+        </div>
+
         <DataTable
+            v-if="incidentView === 'list'"
+            :key="`list-${incidentRange}`"
             class="mt-3"
-            title="Riwayat insiden · 7 hari"
-            :rows="incidents"
+            :title="`Riwayat insiden · ${rangeLabel}`"
+            :rows="filteredIncidents"
             :columns="incidentColumns"
             :row-key="(row, index) => `${row.time}-${index}`"
             default-sort="time"
-            placeholder="Cari insiden..."
-            empty="Belum ada insiden. Insiden dicatat saat satu klien memakai di atas ambang selama ±15 detik."
+            placeholder="Cari klien, IP, MAC..."
+            empty="Tidak ada insiden pada rentang ini."
             min-width="min-w-[60rem]"
             clickable
             :is-active="(row) => isOpen(incidentKey(row))"
             @open="(row) => open(incidentPreview(row))"
+        />
+
+        <DataTable
+            v-else
+            :key="`recap-${incidentRange}`"
+            class="mt-3"
+            :title="`Rekap per klien · ${rangeLabel}`"
+            :rows="recap"
+            :columns="recapColumns"
+            :row-key="(row) => row.address || row.name"
+            default-sort="count"
+            placeholder="Cari klien, IP, MAC..."
+            empty="Tidak ada insiden pada rentang ini."
+            min-width="min-w-[64rem]"
+            clickable
+            :is-active="(row) => isOpen(incidentKey(row.latest))"
+            @open="(row) => open(incidentPreview(row.latest))"
         />
     </template>
 
