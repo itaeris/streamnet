@@ -5,6 +5,7 @@ import AppLayout from '../Layouts/AppLayout.vue';
 import DataTable from '../Components/DataTable.vue';
 import LiveRate from '../Components/LiveRate.vue';
 import PreviewBinder from '../Components/PreviewBinder.vue';
+import SegmentTabs from '../Components/SegmentTabs.vue';
 import { useBoardPulse } from '../composables/usePulse';
 import { usePreview } from '../composables/usePreview';
 import { aliasOf } from '../composables/useLeaseAlias';
@@ -44,6 +45,14 @@ const form = useForm({
     target: '',
 });
 const confirming = ref(false);
+const tabOptions = computed(() => [
+    { id: 'manage', label: 'Manage' },
+    { id: 'incidents', label: props.incidents.length ? `Insiden (${props.incidents.length})` : 'Insiden' },
+    { id: 'settings', label: 'Settings' },
+]);
+const storedTab = localStorage.getItem('bandwidthPolicy.tab');
+const tab = ref(['manage', 'incidents', 'settings'].includes(storedTab) ? storedTab : 'manage');
+watch(tab, (value) => localStorage.setItem('bandwidthPolicy.tab', value));
 let seeded = false;
 
 function seed() {
@@ -186,11 +195,186 @@ function consumerPreview(lease) {
     };
 }
 
+function incidentKey(incident) {
+    return `incident:${incident.time}:${incident.detail}`;
+}
+
+function incidentAddress(incident) {
+    return incident.context?.client?.address
+        || String(incident.detail || '').match(/\((\d{1,3}(?:\.\d{1,3}){3})\)/)?.[1]
+        || '';
+}
+
+function incidentLease(incident) {
+    const address = incidentAddress(incident);
+
+    return (live.value?.leases ?? []).find((row) => row.address === address) ?? null;
+}
+
+function incidentClient(incident) {
+    const lease = incidentLease(incident);
+
+    return incident.context?.client?.name
+        || String(incident.detail || '').split(' (')[0]
+        || (lease ? nameOf(lease) : '')
+        || incidentAddress(incident);
+}
+
+function incidentMac(incident) {
+    return incident.context?.client?.mac || incidentLease(incident)?.mac || '';
+}
+
+function incidentUsage(incident) {
+    return String(incident.detail || '').replace(/^.*\)\s*/, '').replace(/^download\s*/, '↓ ');
+}
+
+const contexts = ref({});
+
+async function loadContext(incident) {
+    const key = incidentKey(incident);
+    const address = incidentAddress(incident);
+    if (!address || contexts.value[key]) {
+        return;
+    }
+
+    contexts.value = { ...contexts.value, [key]: { loading: true } };
+    try {
+        const query = new URLSearchParams({ address, time: incident.time || '' });
+        const response = await fetch(`/bandwidth-policy/context?${query}`, { headers: { Accept: 'application/json' } });
+        const data = response.ok ? await response.json() : { kinds: {}, domains: [] };
+        contexts.value = { ...contexts.value, [key]: data };
+    } catch {
+        contexts.value = { ...contexts.value, [key]: { kinds: {}, domains: [] } };
+    }
+}
+
+watch(() => preview.value?.key, (key) => {
+    const incident = props.incidents.find((row) => incidentKey(row) === key);
+    if (incident) {
+        loadContext(incident);
+    }
+});
+
+function guessOf(incident) {
+    const stored = incident.context?.kind;
+    if (stored && stored !== 'Tidak diketahui') {
+        return stored;
+    }
+
+    const kinds = Object.keys(contexts.value[incidentKey(incident)]?.kinds ?? {});
+
+    return kinds.find((kind) => kind !== 'Browsing & lainnya') || kinds[0] || '–';
+}
+
+function causeSections(incident) {
+    const fetched = contexts.value[incidentKey(incident)];
+    const connections = incident.context?.connections ?? [];
+    const sections = [];
+
+    if (connections.length) {
+        sections.push({
+            title: 'Koneksi terbesar saat insiden',
+            rows: connections.map((row) => ({
+                label: row.name || `${row.remote}${row.port ? `:${row.port}` : ''}`,
+                value: `↓ ${formatRate(row.down)} · ${row.app || row.kind}`,
+                mono: true,
+            })),
+        });
+    }
+
+    if (!fetched || fetched.loading) {
+        sections.push({ title: 'Aktivitas DNS ±3 menit', rows: [{ label: 'Status', value: 'Memuat…' }] });
+
+        return sections;
+    }
+
+    const kinds = Object.entries(fetched.kinds ?? {});
+    sections.push({
+        title: 'Jenis trafik (DNS ±3 menit)',
+        rows: kinds.length ? kinds.map(([kind, total]) => ({ label: kind, value: `${total} query`, mono: false })) : [{ label: 'DNS', value: 'Tidak ada query.' }],
+    });
+
+    if ((fetched.domains ?? []).length) {
+        sections.push({
+            title: 'Domain yang dibuka',
+            rows: fetched.domains.map((row) => ({ label: row.domain, value: `${row.app || row.kind} · ${row.total}×`, mono: true })),
+        });
+    }
+
+    return sections;
+}
+
+function incidentPreview(incident) {
+    const address = incidentAddress(incident);
+    const lease = (live.value?.leases ?? []).find((row) => row.address === address) ?? null;
+    const tone = incident.severity === 'warning' ? 'warn' : incident.severity === 'critical' ? 'danger' : 'cyan';
+    const sameClient = (incidents) => incidents.filter((row) => incidentAddress(row) === address);
+
+    return {
+        key: incidentKey(incident),
+        icon: 'gauge',
+        title: incident.title || 'Insiden bandwidth',
+        subtitle: incident.time || '',
+        detail: address,
+        status: { label: incident.severity || 'info', tone },
+        stream: lease ? { rx: Number(lease.rx_bps) || 0, tx: Number(lease.tx_bps) || 0, flows: lease.flows ?? null, at: live.value?.sampled_at ?? null } : null,
+        tabs: [
+            {
+                id: 'overview',
+                icon: 'gauge',
+                label: 'Insiden',
+                hero: true,
+                sections: [
+                    {
+                        rows: [
+                            { label: 'Waktu', value: incident.time || '–' },
+                            { label: 'Klien', value: incidentClient(incident) || '–', mono: false },
+                            { label: 'IP address', value: address || '–' },
+                            { label: 'MAC address', value: incidentMac(incident) || '–' },
+                            { label: 'Dugaan penyebab', value: guessOf(incident), tone: 'warn', mono: false },
+                            { label: 'Batas per klien', value: capDown.value > 0 ? formatRate(capDown.value) : 'bagi rata' },
+                        ],
+                    },
+                    ...(lease ? [{
+                        title: 'Sekarang',
+                        rows: [
+                            { label: 'Diterima klien', value: `↓ ${formatRate(lease.rx_bps)} · ↑ ${formatRate(lease.tx_bps)}`, tone: 'cyan' },
+                            { label: 'Masuk dari internet', value: `↓ ${formatRate(lease.wan_rx_bps)} · ↑ ${formatRate(lease.wan_tx_bps)}` },
+                            { label: 'Porsi kapasitas', value: `${shareOf(lease)}%`, tone: hogging(lease) ? 'warn' : undefined },
+                        ],
+                    }] : []),
+                ],
+                body: incident.detail || '',
+            },
+            {
+                id: 'cause',
+                icon: 'search',
+                label: 'Penyebab',
+                sections: causeSections(incident),
+            },
+            {
+                id: 'history',
+                icon: 'history',
+                label: 'Riwayat klien',
+                sections: [{
+                    title: `${sameClient(props.incidents).length} insiden · 7 hari`,
+                    rows: sameClient(props.incidents).map((row) => ({ label: row.time || '–', value: String(row.detail || '').replace(/^.*download\s*/, '↓ '), mono: true })),
+                }],
+            },
+        ],
+    };
+}
+
 function activeItem() {
     const key = preview.value?.key ?? '';
     const lease = consumers.value.find((row) => consumerKey(row) === key);
+    if (lease) {
+        return consumerPreview(lease);
+    }
 
-    return lease ? consumerPreview(lease) : null;
+    const incident = props.incidents.find((row) => incidentKey(row) === key);
+
+    return incident ? incidentPreview(incident) : null;
 }
 
 const consumerColumns = [
@@ -205,8 +389,11 @@ const consumerColumns = [
 
 const incidentColumns = [
     { id: 'time', label: 'Waktu', type: 'text', first: 'desc', get: (row) => row.time || '', class: 'font-mono text-mist whitespace-nowrap' },
-    { id: 'title', label: 'Insiden', type: 'text', first: 'asc', get: (row) => row.title || '' },
-    { id: 'detail', label: 'Detail', type: 'text', first: 'asc', get: (row) => row.detail || '', class: 'font-mono text-[11px] text-mist' },
+    { id: 'client', label: 'Klien', type: 'text', first: 'asc', get: incidentClient },
+    { id: 'address', label: 'IP address', type: 'text', first: 'asc', get: incidentAddress, class: 'font-mono text-cyan' },
+    { id: 'mac', label: 'MAC address', type: 'text', first: 'asc', get: incidentMac, class: 'font-mono text-mist' },
+    { id: 'title', label: 'Insiden', type: 'text', first: 'asc', get: (row) => row.title || '', class: 'text-mist' },
+    { id: 'usage', label: 'Pemakaian', type: 'text', first: 'desc', get: incidentUsage, class: 'font-mono text-[11px] whitespace-nowrap' },
 ];
 
 const steps = [
@@ -246,150 +433,161 @@ const steps = [
         </article>
     </section>
 
-    <section class="mt-3 grid gap-3 xl:grid-cols-[1.1fr_1fr]">
-        <article class="noc-card p-4">
-            <p class="text-[15px] font-semibold">Cara kerjanya</p>
-            <p class="mt-1 text-sm text-mist">Saat bandwidth habis, bukan klien yang paling rakus yang menang. Router membagi rata, memberi plafon, lalu meneruskan sisa ke yang kekurangan.</p>
-            <ul class="mt-4 grid gap-3">
-                <li v-for="step in steps" :key="step.title" class="flex gap-3">
-                    <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-tile text-cyan">
-                        <Icon class="text-[18px]" :name="step.icon" />
-                    </span>
-                    <span>
-                        <span class="block text-sm font-medium">{{ step.title }}</span>
-                        <span class="block text-[12px] text-mist">{{ step.text }}</span>
-                    </span>
-                </li>
-            </ul>
-        </article>
+    <SegmentTabs v-model="tab" class="mt-3" :options="tabOptions" />
 
-        <article class="noc-card p-4">
-            <p class="text-[15px] font-semibold">Pemeriksaan router</p>
-            <ul class="mt-3 grid gap-3">
-                <li v-for="check in checks" :key="check.title" class="flex gap-2.5">
-                    <Icon class="mt-0.5 text-[18px]" :class="toneText(check.tone)" :name="toneIcon(check.tone)" />
-                    <span>
-                        <span class="block text-sm font-medium">{{ check.title }}</span>
-                        <span class="block text-[12px] text-mist">{{ check.text }}</span>
-                    </span>
-                </li>
-                <li v-if="!shaping" class="text-sm text-mute">Menunggu data queue dari poller…</li>
-            </ul>
-        </article>
-    </section>
+    <template v-if="tab === 'manage'">
+        <p class="mt-3 font-mono text-[11px] text-mute">
+            {{ afterQueue ? 'Download diterima = rate setelah queue (Torch di LAN). Sebelum queue = yang masuk dari internet, termasuk yang dibuang queue.' : 'Pengukuran setelah queue belum aktif. Angka download masih dari conntrack (sebelum queue).' }}
+        </p>
 
-    <section class="noc-card mt-3 p-4">
-        <div class="flex flex-wrap items-start justify-between gap-2">
-            <div>
-                <p class="text-[15px] font-semibold">Atur kebijakan</p>
-                <p class="mt-1 text-sm text-mist">Angka dalam Mbps. Batas per klien 0 berarti bagi rata tanpa plafon.</p>
+        <DataTable
+            class="mt-3"
+            title="Pemakai terbesar sekarang"
+            :rows="consumers"
+            :columns="consumerColumns"
+            :row-key="(row) => row.address"
+            default-sort="rx"
+            placeholder="Cari klien, IP..."
+            empty="Belum ada trafik klien."
+            min-width="min-w-[52rem]"
+            clickable
+            :is-active="(row) => isOpen(consumerKey(row))"
+            @open="(row) => open(consumerPreview(row))"
+        >
+            <template #share="{ row }">
+                <span class="flex items-center gap-2">
+                    <span class="h-1.5 w-24 overflow-hidden rounded-full bg-well">
+                        <span class="block h-full rounded-full" :class="hogging(row) ? 'bg-warn' : 'bg-cyan'" :style="{ width: `${Math.min(100, shareOf(row))}%` }" />
+                    </span>
+                    <span class="font-mono text-[11px] text-mist">{{ shareOf(row) }}%</span>
+                </span>
+            </template>
+            <template #state="{ row }">
+                <span :class="[badge, hogging(row) ? 'bg-warn/15 text-warn' : 'bg-ok/10 text-ok']">{{ hogging(row) ? 'di atas ambang' : 'normal' }}</span>
+            </template>
+        </DataTable>
+    </template>
+
+    <template v-else-if="tab === 'incidents'">
+        <DataTable
+            class="mt-3"
+            title="Riwayat insiden · 7 hari"
+            :rows="incidents"
+            :columns="incidentColumns"
+            :row-key="(row, index) => `${row.time}-${index}`"
+            default-sort="time"
+            placeholder="Cari insiden..."
+            empty="Belum ada insiden. Insiden dicatat saat satu klien memakai di atas ambang selama ±15 detik."
+            min-width="min-w-[60rem]"
+            clickable
+            :is-active="(row) => isOpen(incidentKey(row))"
+            @open="(row) => open(incidentPreview(row))"
+        />
+    </template>
+
+    <template v-else>
+        <section class="mt-3 grid gap-3 xl:grid-cols-[1.1fr_1fr]">
+            <article class="noc-card p-4">
+                <p class="text-[15px] font-semibold">Cara kerjanya</p>
+                <p class="mt-1 text-sm text-mist">Saat bandwidth habis, bukan klien yang paling rakus yang menang. Router membagi rata, memberi plafon, lalu meneruskan sisa ke yang kekurangan.</p>
+                <ul class="mt-4 grid gap-3">
+                    <li v-for="step in steps" :key="step.title" class="flex gap-3">
+                        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-tile text-cyan">
+                            <Icon class="text-[18px]" :name="step.icon" />
+                        </span>
+                        <span>
+                            <span class="block text-sm font-medium">{{ step.title }}</span>
+                            <span class="block text-[12px] text-mist">{{ step.text }}</span>
+                        </span>
+                    </li>
+                </ul>
+            </article>
+
+            <article class="noc-card p-4">
+                <p class="text-[15px] font-semibold">Pemeriksaan router</p>
+                <ul class="mt-3 grid gap-3">
+                    <li v-for="check in checks" :key="check.title" class="flex gap-2.5">
+                        <Icon class="mt-0.5 text-[18px]" :class="toneText(check.tone)" :name="toneIcon(check.tone)" />
+                        <span>
+                            <span class="block text-sm font-medium">{{ check.title }}</span>
+                            <span class="block text-[12px] text-mist">{{ check.text }}</span>
+                        </span>
+                    </li>
+                    <li v-if="!shaping" class="text-sm text-mute">Menunggu data queue dari poller…</li>
+                </ul>
+            </article>
+        </section>
+
+        <section class="noc-card mt-3 p-4">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <p class="text-[15px] font-semibold">Atur kebijakan</p>
+                    <p class="mt-1 text-sm text-mist">Angka dalam Mbps. Batas per klien 0 berarti bagi rata tanpa plafon.</p>
+                </div>
+                <span v-if="main" class="rounded-full bg-tile px-2.5 py-1 font-mono text-[11px] text-mist">{{ main.name }} · {{ main.target }}</span>
             </div>
-            <span v-if="main" class="rounded-full bg-tile px-2.5 py-1 font-mono text-[11px] text-mist">{{ main.name }} · {{ main.target }}</span>
-        </div>
 
-        <form class="mt-4 grid gap-4 lg:grid-cols-2" @submit.prevent="confirming = true">
-            <div class="grid gap-3 sm:grid-cols-2">
-                <label class="block text-[12px] font-medium text-mist">
-                    Kapasitas download
-                    <input v-model.number="form.capacity_down" type="number" min="1" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
-                </label>
-                <label class="block text-[12px] font-medium text-mist">
-                    Kapasitas upload
-                    <input v-model.number="form.capacity_up" type="number" min="1" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
-                </label>
-                <label class="block text-[12px] font-medium text-mist">
-                    Batas per klien download
-                    <input v-model.number="form.client_down" type="number" min="0" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
-                </label>
-                <label class="block text-[12px] font-medium text-mist">
-                    Batas per klien upload
-                    <input v-model.number="form.client_up" type="number" min="0" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
-                </label>
-                <label v-if="!main" class="block text-[12px] font-medium text-mist sm:col-span-2">
-                    Subnet LAN (target queue)
-                    <input v-model="form.target" placeholder="10.10.10.0/24" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 font-mono text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
-                </label>
-
-                <label class="flex items-center gap-2 text-sm text-mist sm:col-span-2">
-                    <input v-model="form.burst" type="checkbox" class="size-4 accent-cyan-2">
-                    Izinkan burst: boleh lebih cepat sebentar (buka web, unduhan kecil), lalu turun ke batas
-                </label>
-                <template v-if="form.burst">
+            <form class="mt-4 grid gap-4 lg:grid-cols-2" @submit.prevent="confirming = true">
+                <div class="grid gap-3 sm:grid-cols-2">
                     <label class="block text-[12px] font-medium text-mist">
-                        Burst download
-                        <input v-model.number="form.burst_down" type="number" min="0" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
+                        Kapasitas download
+                        <input v-model.number="form.capacity_down" type="number" min="1" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
                     </label>
                     <label class="block text-[12px] font-medium text-mist">
-                        Burst upload
-                        <input v-model.number="form.burst_up" type="number" min="0" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
+                        Kapasitas upload
+                        <input v-model.number="form.capacity_up" type="number" min="1" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
                     </label>
-                    <label class="block text-[12px] font-medium text-mist sm:col-span-2">
-                        Lama burst (detik)
-                        <input v-model.number="form.burst_time" type="number" min="1" max="120" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
+                    <label class="block text-[12px] font-medium text-mist">
+                        Batas per klien download
+                        <input v-model.number="form.client_down" type="number" min="0" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
                     </label>
-                </template>
-            </div>
+                    <label class="block text-[12px] font-medium text-mist">
+                        Batas per klien upload
+                        <input v-model.number="form.client_up" type="number" min="0" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
+                    </label>
+                    <label v-if="!main" class="block text-[12px] font-medium text-mist sm:col-span-2">
+                        Subnet LAN (target queue)
+                        <input v-model="form.target" placeholder="10.10.10.0/24" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 font-mono text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
+                    </label>
 
-            <div class="flex min-w-0 flex-col">
-                <p class="text-[12px] font-medium text-mist">Perintah RouterOS yang akan dijalankan</p>
-                <pre class="mt-1.5 flex-1 overflow-x-auto rounded-xl bg-sink p-3 font-mono text-[11px] leading-5 whitespace-pre text-paper">{{ script }}</pre>
-                <p v-if="form.hasErrors" class="mt-2 text-sm text-danger">{{ Object.values(form.errors)[0] }}</p>
-                <p v-else-if="form.recentlySuccessful" class="mt-2 text-sm text-ok">Diterapkan. Data queue diperbarui di poll berikutnya.</p>
-                <div class="mt-3 flex flex-wrap items-center gap-2">
-                    <template v-if="!confirming">
-                        <button type="submit" class="h-10 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640] disabled:opacity-60" :disabled="form.processing || !shaping">Terapkan ke router</button>
-                        <button v-if="form.isDirty" type="button" class="h-10 rounded-full bg-tile px-4 text-sm text-mist" @click="form.reset()">Kembalikan</button>
-                    </template>
-                    <template v-else>
-                        <span class="text-sm text-warn">Ubah queue di router sekarang?</span>
-                        <button type="button" class="h-10 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640] disabled:opacity-60" :disabled="form.processing" @click="apply">{{ form.processing ? 'Menerapkan…' : 'Ya, terapkan' }}</button>
-                        <button type="button" class="h-10 rounded-full bg-tile px-4 text-sm text-mist" @click="confirming = false">Batal</button>
+                    <label class="flex items-center gap-2 text-sm text-mist sm:col-span-2">
+                        <input v-model="form.burst" type="checkbox" class="size-4 accent-cyan-2">
+                        Izinkan burst: boleh lebih cepat sebentar (buka web, unduhan kecil), lalu turun ke batas
+                    </label>
+                    <template v-if="form.burst">
+                        <label class="block text-[12px] font-medium text-mist">
+                            Burst download
+                            <input v-model.number="form.burst_down" type="number" min="0" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
+                        </label>
+                        <label class="block text-[12px] font-medium text-mist">
+                            Burst upload
+                            <input v-model.number="form.burst_up" type="number" min="0" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
+                        </label>
+                        <label class="block text-[12px] font-medium text-mist sm:col-span-2">
+                            Lama burst (detik)
+                            <input v-model.number="form.burst_time" type="number" min="1" max="120" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
+                        </label>
                     </template>
                 </div>
-            </div>
-        </form>
-    </section>
 
-    <p class="mt-3 font-mono text-[11px] text-mute">
-        {{ afterQueue ? 'Download diterima = rate setelah queue (Torch di LAN). Sebelum queue = yang masuk dari internet, termasuk yang dibuang queue.' : 'Pengukuran setelah queue belum aktif. Angka download masih dari conntrack (sebelum queue).' }}
-    </p>
-
-    <DataTable
-        class="mt-3"
-        title="Pemakai terbesar sekarang"
-        :rows="consumers"
-        :columns="consumerColumns"
-        :row-key="(row) => row.address"
-        default-sort="rx"
-        placeholder="Cari klien, IP..."
-        empty="Belum ada trafik klien."
-        min-width="min-w-[52rem]"
-        clickable
-        :is-active="(row) => isOpen(consumerKey(row))"
-        @open="(row) => open(consumerPreview(row))"
-    >
-        <template #share="{ row }">
-            <span class="flex items-center gap-2">
-                <span class="h-1.5 w-24 overflow-hidden rounded-full bg-well">
-                    <span class="block h-full rounded-full" :class="hogging(row) ? 'bg-warn' : 'bg-cyan'" :style="{ width: `${Math.min(100, shareOf(row))}%` }" />
-                </span>
-                <span class="font-mono text-[11px] text-mist">{{ shareOf(row) }}%</span>
-            </span>
-        </template>
-        <template #state="{ row }">
-            <span :class="[badge, hogging(row) ? 'bg-warn/15 text-warn' : 'bg-ok/10 text-ok']">{{ hogging(row) ? 'di atas ambang' : 'normal' }}</span>
-        </template>
-    </DataTable>
-
-    <DataTable
-        class="mt-3"
-        title="Riwayat insiden · 7 hari"
-        :rows="incidents"
-        :columns="incidentColumns"
-        :row-key="(row, index) => `${row.time}-${index}`"
-        default-sort="time"
-        placeholder="Cari insiden..."
-        empty="Belum ada insiden. Insiden dicatat saat satu klien memakai di atas ambang selama ±15 detik."
-        min-width="min-w-[44rem]"
-    />
+                <div class="flex min-w-0 flex-col">
+                    <p class="text-[12px] font-medium text-mist">Perintah RouterOS yang akan dijalankan</p>
+                    <pre class="mt-1.5 flex-1 overflow-x-auto rounded-xl bg-sink p-3 font-mono text-[11px] leading-5 whitespace-pre text-paper">{{ script }}</pre>
+                    <p v-if="form.hasErrors" class="mt-2 text-sm text-danger">{{ Object.values(form.errors)[0] }}</p>
+                    <p v-else-if="form.recentlySuccessful" class="mt-2 text-sm text-ok">Diterapkan. Data queue diperbarui di poll berikutnya.</p>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <template v-if="!confirming">
+                            <button type="submit" class="h-10 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640] disabled:opacity-60" :disabled="form.processing || !shaping">Terapkan ke router</button>
+                            <button v-if="form.isDirty" type="button" class="h-10 rounded-full bg-tile px-4 text-sm text-mist" @click="form.reset()">Kembalikan</button>
+                        </template>
+                        <template v-else>
+                            <span class="text-sm text-warn">Ubah queue di router sekarang?</span>
+                            <button type="button" class="h-10 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640] disabled:opacity-60" :disabled="form.processing" @click="apply">{{ form.processing ? 'Menerapkan…' : 'Ya, terapkan' }}</button>
+                            <button type="button" class="h-10 rounded-full bg-tile px-4 text-sm text-mist" @click="confirming = false">Batal</button>
+                        </template>
+                    </div>
+                </div>
+            </form>
+        </section>
+    </template>
 </template>

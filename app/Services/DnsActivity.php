@@ -59,10 +59,103 @@ class DnsActivity
         'googlesyndication.com' => 'Iklan',
     ];
 
+    /**
+     * What kind of traffic a domain usually carries, used to explain bandwidth spikes.
+     *
+     * @var array<string, string>
+     */
+    private array $kinds = [
+        'googlevideo.com' => 'Streaming video',
+        'youtube.com' => 'Streaming video',
+        'ytimg.com' => 'Streaming video',
+        'nflxvideo.net' => 'Streaming video',
+        'netflix.com' => 'Streaming video',
+        'tiktokcdn.com' => 'Streaming video',
+        'tiktokcdn-us.com' => 'Streaming video',
+        'tiktokv.com' => 'Streaming video',
+        'byteoversea.com' => 'Streaming video',
+        'ibyteimg.com' => 'Streaming video',
+        'vidio.com' => 'Streaming video',
+        'viu.com' => 'Streaming video',
+        'iq.com' => 'Streaming video',
+        'primevideo.com' => 'Streaming video',
+        'aiv-cdn.net' => 'Streaming video',
+        'hotstar.com' => 'Streaming video',
+        'twitch.tv' => 'Streaming video',
+        'ttvnw.net' => 'Streaming video',
+        'spotify.com' => 'Streaming audio',
+        'scdn.co' => 'Streaming audio',
+        'fbcdn.net' => 'Media sosial',
+        'cdninstagram.com' => 'Media sosial',
+        'instagram.com' => 'Media sosial',
+        'facebook.com' => 'Media sosial',
+        'twimg.com' => 'Media sosial',
+        'windowsupdate.com' => 'Update & unduhan software',
+        'update.microsoft.com' => 'Update & unduhan software',
+        'delivery.mp.microsoft.com' => 'Update & unduhan software',
+        'officecdn.microsoft.com' => 'Update & unduhan software',
+        'swcdn.apple.com' => 'Update & unduhan software',
+        'updates.cdn-apple.com' => 'Update & unduhan software',
+        'mesu.apple.com' => 'Update & unduhan software',
+        'osxapps.itunes.apple.com' => 'Update & unduhan software',
+        'appldnld.apple.com' => 'Update & unduhan software',
+        'dl.google.com' => 'Update & unduhan software',
+        'gvt1.com' => 'Update & unduhan software',
+        'play-lh.googleusercontent.com' => 'Update & unduhan software',
+        'download.nvidia.com' => 'Update & unduhan software',
+        'ccmdl.adobe.com' => 'Update & unduhan software',
+        'steamcontent.com' => 'Game & unduhan game',
+        'steamserver.net' => 'Game & unduhan game',
+        'steampowered.com' => 'Game & unduhan game',
+        'epicgames.com' => 'Game & unduhan game',
+        'riotgames.com' => 'Game & unduhan game',
+        'roblox.com' => 'Game & unduhan game',
+        'garena.com' => 'Game & unduhan game',
+        'mobilelegends.com' => 'Game & unduhan game',
+        'icloud-content.com' => 'Cloud sync & backup',
+        'icloud.com' => 'Cloud sync & backup',
+        'sharepoint.com' => 'Cloud sync & backup',
+        'onedrive.com' => 'Cloud sync & backup',
+        '1drv.com' => 'Cloud sync & backup',
+        'blob.core.windows.net' => 'Cloud sync & backup',
+        'store.core.windows.net' => 'Cloud sync & backup',
+        'drive.google.com' => 'Cloud sync & backup',
+        'docs.googleusercontent.com' => 'Cloud sync & backup',
+        'dropbox.com' => 'Cloud sync & backup',
+        'dropboxusercontent.com' => 'Cloud sync & backup',
+        'larksuite.com' => 'Cloud sync & backup',
+        'larksuitecdn.com' => 'Cloud sync & backup',
+        'zoom.us' => 'Video call',
+        'zoom.com' => 'Video call',
+        'teams.microsoft.com' => 'Video call',
+        'skype.com' => 'Video call',
+        'webex.com' => 'Video call',
+        'meet.google.com' => 'Video call',
+        'whatsapp.net' => 'Chat & panggilan',
+        'whatsapp.com' => 'Chat & panggilan',
+    ];
+
     public function __construct()
     {
         uksort($this->apps, fn (string $left, string $right) => strlen($right) <=> strlen($left));
         uksort($this->browsers, fn (string $left, string $right) => strlen($right) <=> strlen($left));
+        uksort($this->kinds, fn (string $left, string $right) => strlen($right) <=> strlen($left));
+    }
+
+    public function kind(?string $domain): string
+    {
+        $domain = strtolower(trim((string) $domain, '. '));
+        if ($domain === '') {
+            return 'Tidak diketahui';
+        }
+
+        foreach ($this->kinds as $suffix => $kind) {
+            if ($domain === $suffix || str_ends_with($domain, '.'.$suffix)) {
+                return $kind;
+            }
+        }
+
+        return 'Browsing & lainnya';
     }
 
     /**

@@ -249,6 +249,11 @@ class MikrotikPoller
             'timezone' => $clock['time-zone-name'] ?? null,
         ];
 
+        $identityName = mb_substr($system['identity'], 0, 80);
+        if ($this->router->name === $this->router->host && $identityName !== '' && $identityName !== 'MikroTik') {
+            $this->router->update(['name' => $identityName]);
+        }
+
         $interfaceRows = $this->mapInterfaces($interfaces, $rates, $sampledAt);
 
         $payload = DB::transaction(function () use ($batch, $sampledAt, $system, $interfaceRows, $connections) {
@@ -333,7 +338,7 @@ class MikrotikPoller
             $shaping = $batch['queues'] === null || $batch['queue_types'] === null
                 ? ($previousPayload['shaping'] ?? null)
                 : $this->mapShaping($batch['queues'], $batch['queue_types'], $batch['filter'] ?? null);
-            $this->trackBandwidthHogs($leases, is_array($shaping) ? $shaping : null, $sampledAt);
+            $this->trackBandwidthHogs($leases, is_array($shaping) ? $shaping : null, $sampledAt, $batch['host_traffic'] ?? null);
 
             $leaseSummary = [
                 'total' => count($leases),
@@ -1020,7 +1025,7 @@ class MikrotikPoller
      * @param  array<int, array<string, mixed>>  $leases
      * @param  array<string, mixed>|null  $shaping
      */
-    private function trackBandwidthHogs(array $leases, ?array $shaping, Carbon $sampledAt): void
+    private function trackBandwidthHogs(array $leases, ?array $shaping, Carbon $sampledAt, mixed $hostTraffic = null): void
     {
         $capacity = (int) ($shaping['main']['max_down'] ?? 0);
         $cap = (int) ($shaping['down_type']['rate'] ?? 0);
@@ -1064,8 +1069,126 @@ class MikrotikPoller
                     $rate / 1_000_000,
                     $share !== null ? " · {$share}% kapasitas" : '',
                 ),
+                'context' => [
+                    'client' => [
+                        'name' => $who,
+                        'address' => $address,
+                        'mac' => $lease['mac'] ?? null,
+                        'down' => $rate,
+                        'share' => $share,
+                    ],
+                    ...$this->hogContext($address, $hostTraffic, $sampledAt),
+                ],
             ]);
         }
+    }
+
+    /**
+     * What the client was doing when it hit the limit: its heaviest connections, named via the
+     * router's DNS cache, plus the domains it looked up in the last few minutes.
+     *
+     * @return array<string, mixed>
+     */
+    private function hogContext(string $address, mixed $hostTraffic, Carbon $sampledAt): array
+    {
+        $flows = [];
+        foreach ($this->rows($hostTraffic) as $row) {
+            $src = (string) ($row['src-address'] ?? '');
+            $dst = (string) ($row['dst-address'] ?? '');
+            if ($this->hostAddress($src) === $address) {
+                $remote = $dst;
+                $down = $this->integer($row['repl-rate'] ?? 0);
+                $up = $this->integer($row['orig-rate'] ?? 0);
+            } elseif ($this->hostAddress($dst) === $address) {
+                $remote = $src;
+                $down = $this->integer($row['orig-rate'] ?? 0);
+                $up = $this->integer($row['repl-rate'] ?? 0);
+            } else {
+                continue;
+            }
+
+            $flows[$remote]['down'] = ($flows[$remote]['down'] ?? 0) + $down;
+            $flows[$remote]['up'] = ($flows[$remote]['up'] ?? 0) + $up;
+        }
+
+        uasort($flows, fn (array $left, array $right) => $right['down'] <=> $left['down']);
+        $flows = array_slice($flows, 0, 8, true);
+        $names = $flows === [] ? [] : $this->dnsNames();
+        $connections = [];
+        $byKind = [];
+
+        foreach ($flows as $remote => $rate) {
+            $ip = $this->hostAddress($remote);
+            $port = str_contains($remote, ':') ? (int) substr(strrchr($remote, ':'), 1) : null;
+            $name = $names[$ip] ?? null;
+            $kind = $name !== null ? $this->dns->kind($name) : 'Tidak diketahui';
+            $byKind[$kind] = ($byKind[$kind] ?? 0) + $rate['down'];
+            $connections[] = [
+                'remote' => $ip,
+                'port' => $port,
+                'name' => $name,
+                'app' => $name !== null ? $this->dns->app($name) : null,
+                'kind' => $kind,
+                'down' => $rate['down'],
+                'up' => $rate['up'],
+            ];
+        }
+
+        arsort($byKind);
+        $recent = DnsQuery::query()
+            ->where('mikrotik_session_id', $this->router->id)
+            ->where('address', $address)
+            ->where('logged_at', '>=', $sampledAt->copy()->subMinutes(3))
+            ->selectRaw('app, count(*) as total')
+            ->groupBy('app')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->pluck('total', 'app')
+            ->all();
+
+        return [
+            'kind' => array_key_first($byKind),
+            'connections' => $connections,
+            'recent_apps' => $recent,
+        ];
+    }
+
+    /**
+     * IPv4 address to the name the client originally asked for, following CNAME chains.
+     *
+     * @return array<string, string>
+     */
+    private function dnsNames(): array
+    {
+        try {
+            $rows = $this->rows($this->client->gather([
+                'cache' => ['path' => 'ip/dns/cache', 'body' => ['.proplist' => 'name,type,data']],
+            ], $this->router->connection())['cache'] ?? null);
+        } catch (Throwable) {
+            return [];
+        }
+
+        $aliasOf = [];
+        $names = [];
+        foreach ($rows as $row) {
+            $name = rtrim(strtolower((string) ($row['name'] ?? '')), '.');
+            $data = rtrim(strtolower((string) ($row['data'] ?? '')), '.');
+            if (($row['type'] ?? '') === 'CNAME' && $name !== '' && $data !== '') {
+                $aliasOf[$data] = $name;
+            } elseif (($row['type'] ?? '') === 'A' && $name !== '' && filter_var($data, FILTER_VALIDATE_IP)) {
+                $names[$data] = $name;
+            }
+        }
+
+        foreach ($names as $ip => $name) {
+            $seen = 0;
+            while (isset($aliasOf[$name]) && $seen++ < 8) {
+                $name = $aliasOf[$name];
+            }
+            $names[$ip] = $name;
+        }
+
+        return $names;
     }
 
     /**

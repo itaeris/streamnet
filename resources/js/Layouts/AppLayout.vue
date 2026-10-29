@@ -21,6 +21,19 @@ const routerOpen = ref(false);
 const routerRoot = ref(null);
 const sessions = computed(() => page.props.sessions ?? []);
 const currentSession = computed(() => sessions.value.find((item) => item.id === page.props.currentSessionId) ?? null);
+
+function sessionLabel(item) {
+    if (!item) {
+        return pulse.value?.system?.identity || 'MikroTik';
+    }
+
+    const named = item.name && item.name !== item.host;
+    if (named) {
+        return item.name;
+    }
+
+    return (item.id === page.props.currentSessionId && pulse.value?.system?.identity) || item.name || item.host || 'MikroTik';
+}
 const initials = computed(() => {
     const parts = String(page.props.auth.user?.name || '').trim().split(/\s+/).filter(Boolean);
     const letters = parts.slice(0, 2).map((part) => part[0] || '').join('');
@@ -234,7 +247,7 @@ const dotClass = computed(() => {
             <div class="px-3 pt-3">
                 <div ref="routerRoot" class="relative rounded-lg bg-well p-3" :class="collapsed ? 'flex justify-center p-2' : ''">
                     <template v-if="collapsed">
-                        <button type="button" class="text-cyan" v-tip:right="currentSession?.name || 'Ganti router'" @click="routerOpen = !routerOpen">
+                        <button type="button" class="text-cyan" v-tip:right="sessionLabel(currentSession)" @click="routerOpen = !routerOpen">
                             <Icon class="text-[22px]" name="router" />
                         </button>
                         <MenuPanel :open="routerOpen" class="absolute top-0 left-full z-50 ml-2 w-56 origin-top-left rounded-lg bg-menu p-2 shadow-md ring-1 ring-edge">
@@ -248,7 +261,7 @@ const dotClass = computed(() => {
                                     class="rounded-md px-2 py-1.5 text-left"
                                     :class="item.id === page.props.currentSessionId ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile'"
                                 >
-                                    <span class="block truncate text-xs">{{ item.name }}</span>
+                                    <span class="block truncate text-xs">{{ sessionLabel(item) }}</span>
                                     <span class="block truncate font-mono text-[10px] opacity-80">{{ item.host }}</span>
                                 </Link>
                             </div>
@@ -261,7 +274,7 @@ const dotClass = computed(() => {
                             <Icon class="text-[18px] transition-transform duration-200" :class="routerOpen ? 'rotate-180' : ''" name="expand_more" />
                         </button>
                     </div>
-                    <p class="mt-1 truncate text-[15px] font-semibold">{{ currentSession?.name || pulse?.system?.board || 'MikroTik' }}</p>
+                    <p class="mt-1 truncate text-[15px] font-semibold">{{ sessionLabel(currentSession) }}</p>
                     <p v-if="currentSession" class="truncate font-mono text-[11px] text-cyan">{{ currentSession.host }}</p>
                     <MenuPanel :open="routerOpen" inline>
                     <div class="mt-2 flex flex-col gap-1 border-t border-edge pt-2">
@@ -274,7 +287,7 @@ const dotClass = computed(() => {
                             class="rounded-md px-2 py-1.5 text-left"
                             :class="item.id === page.props.currentSessionId ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile'"
                         >
-                            <span class="block truncate text-xs">{{ item.name }}</span>
+                            <span class="block truncate text-xs">{{ sessionLabel(item) }}</span>
                             <span class="block truncate font-mono text-[10px] opacity-80">{{ item.host }}</span>
                         </Link>
                     </div>
@@ -354,7 +367,7 @@ const dotClass = computed(() => {
             </main>
             <footer class="flex shrink-0 items-center justify-between gap-3 border-t border-edge px-4 py-2.5 font-mono text-[11px] text-mist">
                 <span class="font-sans text-xs font-semibold text-paper">StreamNet</span>
-                <span class="min-w-0 truncate">{{ currentSession?.name || pulse?.system?.identity || 'MikroTik' }}</span>
+                <span class="min-w-0 truncate">{{ sessionLabel(currentSession) }}</span>
                 <span class="shrink-0 text-mute">{{ pulse?.sampled_label || '–' }}</span>
             </footer>
             </div>

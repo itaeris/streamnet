@@ -13,12 +13,14 @@ class SecurityEvent extends Model
         'category',
         'title',
         'detail',
+        'context',
     ];
 
     protected function casts(): array
     {
         return [
             'occurred_at' => 'datetime',
+            'context' => 'array',
         ];
     }
 
@@ -33,6 +35,7 @@ class SecurityEvent extends Model
             'category' => $this->category,
             'title' => $this->title,
             'detail' => $this->detail,
+            'context' => $this->context,
         ];
     }
 }

@@ -125,9 +125,18 @@ function endpoint(session) {
 <template>
     <Head :title="section === 'sessions' ? 'Sesi MikroTik' : 'Aplikasi'" />
 
-        <nav class="mb-4 flex flex-wrap gap-1">
-            <Link href="/pengaturan" class="rounded-full px-3 py-1.5 text-sm" :class="section === 'app' ? 'bg-cyan-2 font-semibold text-[#003640]' : 'bg-tile text-mist'">Aplikasi</Link>
-            <Link href="/pengaturan/sesi" class="rounded-full px-3 py-1.5 text-sm" :class="section === 'sessions' ? 'bg-cyan-2 font-semibold text-[#003640]' : 'bg-tile text-mist'">Sesi MikroTik</Link>
+        <nav class="mb-4 inline-flex max-w-full overflow-x-auto rounded-xl bg-well p-1" role="tablist">
+            <Link
+                v-for="item in [{ id: 'app', href: '/pengaturan', label: 'Aplikasi' }, { id: 'sessions', href: '/pengaturan/sesi', label: 'Sesi MikroTik' }]"
+                :key="item.id"
+                :href="item.href"
+                role="tab"
+                :aria-selected="section === item.id"
+                class="flex h-8 shrink-0 items-center rounded-lg px-3.5 text-[12px] whitespace-nowrap transition-colors duration-150"
+                :class="section === item.id ? 'bg-panel font-semibold text-cyan shadow-sm ring-1 ring-edge' : 'text-mute hover:bg-hover hover:text-paper'"
+            >
+                {{ item.label }}
+            </Link>
         </nav>
 
         <template v-if="section === 'sessions'">

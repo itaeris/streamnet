@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DnsQuery;
 use App\Models\InterfaceSample;
 use App\Models\SecurityEvent;
 use App\Services\AnalyticsQuery;
+use App\Services\DnsActivity;
 use App\Services\Mikrotik\CurrentMikrotikSession;
 use App\Services\Mikrotik\MikrotikClient;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -43,6 +47,42 @@ class BandwidthPolicyController extends Controller
                 ->get()
                 ->map->toPayload()
                 ->all(),
+        ]);
+    }
+
+    public function context(Request $request, CurrentMikrotikSession $current, DnsActivity $dns): JsonResponse
+    {
+        $data = $request->validate([
+            'address' => ['required', 'ip'],
+            'time' => ['required', 'date'],
+        ]);
+        $at = Carbon::parse($data['time'], config('app.timezone'));
+
+        $rows = DnsQuery::query()
+            ->where('mikrotik_session_id', $current->resolve()?->id)
+            ->where('address', $data['address'])
+            ->whereBetween('logged_at', [$at->copy()->subMinutes(3), $at->copy()->addMinute()])
+            ->selectRaw('domain, app, count(*) as total, max(logged_at) as last_at')
+            ->groupBy('domain', 'app')
+            ->orderByDesc('total')
+            ->limit(20)
+            ->get();
+
+        $kinds = [];
+        foreach ($rows as $row) {
+            $kind = $dns->kind($row->domain);
+            $kinds[$kind] = ($kinds[$kind] ?? 0) + (int) $row->total;
+        }
+        arsort($kinds);
+
+        return response()->json([
+            'kinds' => $kinds,
+            'domains' => $rows->map(fn ($row) => [
+                'domain' => $row->domain,
+                'app' => $row->app,
+                'kind' => $dns->kind($row->domain),
+                'total' => (int) $row->total,
+            ])->values(),
         ]);
     }
 
