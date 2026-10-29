@@ -81,6 +81,19 @@ Router yang sedang dibuka dipilih dari kartu **Active router** di sidebar, atau 
 
 Port API atau REST router harus bisa dijangkau dari mesin yang menjalankan `mikrotik:watch`. User router cukup read-only untuk `system`, `interface`, `ip/dhcp-server`, `ip/firewall`, `log`, dan `user/active`.
 
+## UniFi
+
+Menu **Access Points** membaca UniFi Network Integration API (`/proxy/network/integration/v1`) dari console UniFi OS. Buat API key di UniFi Network → Settings → Control Plane → Integrations.
+
+| Variabel | Fungsi |
+| --- | --- |
+| `UNIFI_URL` | Alamat console, misalnya `https://unifi.contoh.id`. |
+| `UNIFI_API_KEY` | API key integrasi. Hanya disimpan di `.env`. |
+| `UNIFI_SITE` | ID, nama, atau `default`. Kosongkan untuk site pertama. |
+| `UNIFI_VERIFY_TLS` | `false` kalau console memakai sertifikat self-signed. |
+
+Data AP, statistik, dan klien di-cache 10 detik (`UNIFI_CACHE_SECONDS`), jadi reload Live tidak membanjiri console.
+
 ## Halaman
 
 | Path | Isi |
@@ -88,6 +101,7 @@ Port API atau REST router harus bisa dijangkau dari mesin yang menjalankan `mikr
 | `/` | Ringkasan jaringan dan matriks port. |
 | `/bandwidth` | Interface dan trafik. |
 | `/dhcp` | Perangkat terhubung. |
+| `/access-points` | Access point dan klien WiFi dari UniFi. |
 | `/security` | Firewall dan temuan. |
 | `/logs` | Aliran log. |
 | `/pengaturan` | Tambah, ubah, hapus, dan pilih sesi MikroTik. |

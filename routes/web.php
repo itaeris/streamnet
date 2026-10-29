@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccessPointController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\BandwidthController;
 use App\Http\Controllers\DashboardController;
@@ -22,6 +23,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/dhcp/dns', [DhcpController::class, 'dns'])->name('dhcp.dns');
     Route::put('/dhcp/alias', [DhcpController::class, 'updateComment'])->name('dhcp.alias');
     Route::get('/dns', DnsController::class)->name('dns');
+    Route::get('/access-points', AccessPointController::class)->name('access-points');
     Route::get('/logs', LogController::class)->name('logs');
     Route::get('/security', SecurityController::class)->name('security');
     Route::get('/pengaturan', [MikrotikSessionController::class, 'account'])->name('settings');

@@ -74,6 +74,20 @@ export function formatUptime(value) {
     return parts.slice(0, 2).map(([amount, label]) => `${amount} ${label}`).join(' ');
 }
 
+export function formatSeconds(seconds) {
+    const total = Math.max(0, Math.floor(Number(seconds)));
+    if (!Number.isFinite(total) || seconds === null || seconds === undefined) {
+        return '–';
+    }
+
+    const weeks = Math.floor(total / 604800);
+    const days = Math.floor((total % 604800) / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+
+    return formatUptime(`${weeks}w${days}d${hours}h${minutes}m${total % 60}s`);
+}
+
 export function durationSeconds(value) {
     const raw = String(value || '').trim();
     const match = raw.match(/^(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);

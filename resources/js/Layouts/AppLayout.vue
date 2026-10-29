@@ -50,6 +50,7 @@ const links = [
     { href: '/bandwidth', label: 'Interfaces & Traffic', icon: 'swap_horiz' },
     { href: '/dhcp', label: 'Connected Devices', icon: 'devices' },
     { href: '/dns', label: 'DNS & Apps', icon: 'language' },
+    { href: '/access-points', label: 'Access Points', icon: 'wifi' },
     { href: '/security', label: 'Firewall & Security', icon: 'shield' },
     { href: '/logs', label: 'Log Stream', icon: 'receipt_long' },
 ];
@@ -59,6 +60,7 @@ const titles = {
     '/bandwidth': 'Interfaces',
     '/dhcp': 'Devices',
     '/dns': 'DNS & Apps',
+    '/access-points': 'Access Points',
     '/security': 'Firewall',
     '/logs': 'Log Stream',
     '/pengaturan': 'Pengaturan',

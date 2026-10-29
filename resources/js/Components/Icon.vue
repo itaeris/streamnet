@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import {
     Activity,
+    Antenna,
     ArrowDown,
     ArrowRight,
     ArrowUp,
@@ -41,6 +42,8 @@ import {
     Thermometer,
     TriangleAlert,
     UserCog,
+    Users,
+    Wifi,
     Waypoints,
     X,
     ZoomOut,
@@ -92,7 +95,10 @@ const icons = {
     shield: Shield,
     swap_horiz: Activity,
     thermostat: Thermometer,
+    group: Users,
+    radio: Antenna,
     visibility: Eye,
+    wifi: Wifi,
     visibility_off: EyeOff,
     zoom_out: ZoomOut,
 };
