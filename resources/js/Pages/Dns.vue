@@ -141,12 +141,13 @@ const links = computed(() => rank(
 ));
 const siteForApp = (name) => apps.value.find((item) => item.name === name)?.site || '';
 const storedTab = localStorage.getItem('dns.tab');
-const tab = ref(['apps', 'browsers', 'links'].includes(storedTab) ? storedTab : 'apps');
+const tab = ref(['apps', 'browsers', 'links', 'devices'].includes(storedTab) ? storedTab : 'apps');
 watch(tab, (value) => localStorage.setItem('dns.tab', value));
 const tabOptions = computed(() => [
     { id: 'apps', label: apps.value.length ? `Aplikasi (${apps.value.length})` : 'Aplikasi' },
     { id: 'browsers', label: browsers.value.length ? `Browser (${browsers.value.length})` : 'Browser' },
     { id: 'links', label: links.value.length ? `Tautan (${links.value.length})` : 'Tautan' },
+    { id: 'devices', label: devices.value.length ? `Perangkat (${devices.value.length})` : 'Perangkat' },
 ]);
 const activeRank = computed(() => (tab.value === 'browsers' ? browsers.value : tab.value === 'links' ? links.value : apps.value));
 const emptyRank = computed(() => (tab.value === 'browsers' ? 'Browser belum ketahuan.' : tab.value === 'links' ? 'Belum ada tautan.' : 'Belum ada aplikasi.'));
@@ -231,12 +232,13 @@ const deviceLabel = (row) => row.host || row.address || '';
 
     <SegmentTabs v-model="tab" class="mt-3" :options="tabOptions" />
 
-    <section class="noc-card mt-3 p-3">
+    <section v-if="tab !== 'devices'" class="noc-card mt-3 p-3">
         <ul v-if="activeRank.length" class="divide-y divide-line">
             <li v-for="item in activeRank" :key="item.name" class="flex items-center gap-2.5 py-2.5">
                 <SiteMark :domain="item.site" :label="item.name" />
                 <div class="min-w-0 flex-1">
                     <p class="truncate text-sm font-medium">{{ item.name }}</p>
+                    <p v-if="item.site" class="truncate font-mono text-[10px] text-mute">{{ item.site }}</p>
                     <p class="font-mono text-[10px] text-mute">{{ item.queries }} query</p>
                 </div>
                 <p class="shrink-0 text-right">
@@ -248,9 +250,7 @@ const deviceLabel = (row) => row.host || row.address || '';
         <p v-else class="py-6 text-center font-mono text-[11px] text-mute">{{ emptyRank }}</p>
     </section>
 
-    <p class="mt-3 font-mono text-[11px] text-mute">Jumlah pengguna dihitung dari alamat yang menanyakan domain itu. Aplikasi ditebak dari domain. Browser hanya muncul kalau domainnya khas browser itu. Logo diambil dari situs itu sendiri.</p>
-
-    <section class="noc-card mt-3 overflow-x-auto">
+    <section v-else class="noc-card mt-3 overflow-x-auto">
         <PagedTable :rows="devices" :text="deviceText" :label="deviceLabel" :columns="sortColumns" default-sort="queries" placeholder="Cari perangkat, domain, aplikasi...">
             <template #default="{ rows: pageRows, sortOf }">
                 <table class="w-full min-w-[48rem] text-left text-sm">

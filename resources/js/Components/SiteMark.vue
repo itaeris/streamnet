@@ -6,19 +6,25 @@ const props = defineProps({
     label: { type: String, default: '' },
 });
 
-const failed = ref(false);
+const attempt = ref(0);
 
 watch(() => props.domain, () => {
-    failed.value = false;
+    attempt.value = 0;
 });
 
-const src = computed(() => (props.domain ? `/dns/logo?domain=${encodeURIComponent(props.domain)}` : ''));
-const letter = computed(() => (props.label || props.domain || '?').slice(0, 1).toUpperCase());
+const host = computed(() => String(props.domain || '').replace(/^https?:\/\//, '').split('/')[0].replace(/\.$/, ''));
+const sources = computed(() => (host.value ? [`https://${host.value}/favicon.ico`, `https://${host.value}/apple-touch-icon.png`] : []));
+const src = computed(() => sources.value[attempt.value] || '');
+const letter = computed(() => (props.label || host.value || '?').slice(0, 1).toUpperCase());
+
+function failed() {
+    attempt.value += 1;
+}
 </script>
 
 <template>
     <span class="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-tile text-[11px] font-semibold text-mist">
-        <img v-if="src && !failed" :src="src" :alt="label || domain" class="size-full object-cover" @error="failed = true" />
+        <img v-if="src" :src="src" :alt="label || host" class="size-full object-cover" referrerpolicy="no-referrer" @error="failed" />
         <span v-else>{{ letter }}</span>
     </span>
 </template>
