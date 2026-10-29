@@ -238,6 +238,54 @@ class DnsActivity
         return ucfirst($label);
     }
 
+    public function website(string $app): ?string
+    {
+        $slug = (string) preg_replace('/[^a-z0-9]/', '', strtolower($app));
+        $sites = [];
+        foreach ($this->apps as $suffix => $name) {
+            if ($name !== $app || preg_match('/cdn|static|img|video|gvt|doubleclick|syndication/', $suffix) === 1) {
+                continue;
+            }
+            $sites[] = $suffix;
+        }
+        if ($sites === []) {
+            return null;
+        }
+
+        usort($sites, function (string $left, string $right) use ($slug): int {
+            $score = function (string $site) use ($slug): array {
+                $brand = 1;
+                foreach (explode('.', $site) as $label) {
+                    if (strlen($slug) >= 4 && str_contains($label, $slug)) {
+                        $brand = 0;
+                    }
+                }
+
+                return [$brand, strlen($site)];
+            };
+
+            return $score($left) <=> $score($right);
+        });
+
+        return $sites[0];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function websites(): array
+    {
+        $sites = [];
+        foreach (array_unique(array_values($this->apps)) as $name) {
+            $site = $this->website($name);
+            if ($site !== null) {
+                $sites[$name] = $site;
+            }
+        }
+
+        return $sites;
+    }
+
     public function browser(string $domain): ?string
     {
         foreach ($this->browsers as $suffix => $name) {

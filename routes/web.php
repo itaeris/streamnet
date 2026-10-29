@@ -10,6 +10,7 @@ use App\Http\Controllers\DnsController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\MikrotikSessionController;
 use App\Http\Controllers\SecurityController;
+use App\Http\Controllers\SiteLogoController;
 use App\Http\Controllers\TopologyController;
 use App\Http\Controllers\UnifiSettingsController;
 use App\Http\Controllers\UserController;
@@ -36,6 +37,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/dhcp/dns', [DhcpController::class, 'dns'])->name('dhcp.dns');
     Route::put('/dhcp/alias', [DhcpController::class, 'updateComment'])->name('dhcp.alias');
     Route::get('/dns', DnsController::class);
+    Route::get('/dns/logo', SiteLogoController::class)->middleware('throttle:120,1');
     Route::get('/access-points', AccessPointController::class);
     Route::get('/topology', TopologyController::class);
     Route::get('/bandwidth-policy', [BandwidthPolicyController::class, 'index']);

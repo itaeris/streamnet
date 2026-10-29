@@ -28,6 +28,15 @@ class DnsActivityTest extends TestCase
         $this->assertSame('Tidak diketahui', $dns->kind(null));
     }
 
+    public function test_it_points_an_app_at_its_own_website(): void
+    {
+        $dns = new DnsActivity;
+
+        $this->assertSame('youtube.com', $dns->website('YouTube'));
+        $this->assertSame('instagram.com', $dns->website('Instagram'));
+        $this->assertSame('microsoft.com', $dns->website('Microsoft'));
+    }
+
     public function test_it_ignores_reverse_lookups(): void
     {
         $this->assertNull((new DnsActivity)->parse('dns', 'query from 10.10.10.23: #9 1.0.0.10.in-addr.arpa. PTR'));
