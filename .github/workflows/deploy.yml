@@ -119,11 +119,13 @@ jobs:
           BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
         run: |
           set -euo pipefail
-          umask 077
-          printf '%s\n' "$BACKEND_ENV" | base64 -w0 > "$RUNNER_TEMP/backend.b64"
-          echo "b64<<EOF" >> "$GITHUB_OUTPUT"
-          cat "$RUNNER_TEMP/backend.b64" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          b64="$(printf '%s\n' "$BACKEND_ENV" | base64 -w0)"
+          if [ -z "$b64" ]; then
+            echo "BACKEND_ENV kosong." >&2
+            exit 1
+          fi
+          echo "::add-mask::$b64"
+          echo "b64=${b64}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy
         uses: appleboy/ssh-action@v1.2.2
