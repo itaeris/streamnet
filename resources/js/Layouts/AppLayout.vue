@@ -432,14 +432,14 @@ const dotClass = computed(() => {
         </aside>
 
             <div class="flex min-w-0 flex-1 flex-col">
-            <main ref="main" class="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
-                <div v-if="pulse && pulse.online === false" class="noc-card mb-3 border-danger/40 px-3 py-2 text-sm text-danger">
+            <main ref="main" class="min-h-0 flex-1 overflow-y-auto p-3" :class="current === '/topology' ? 'flex flex-col' : ''">
+                <div v-if="pulse && pulse.online === false" class="noc-card mb-3 shrink-0 border-danger/40 px-3 py-2 text-sm text-danger">
                     Router tidak terjangkau. {{ pulse.error }}
                 </div>
-                <div v-else-if="!pulse" class="noc-card mb-3 border-warn/40 px-3 py-2 text-sm text-warn">
+                <div v-else-if="!pulse" class="noc-card mb-3 shrink-0 border-warn/40 px-3 py-2 text-sm text-warn">
                     Belum ada sampel. Pemantau MikroTik belum mengirim data.
                 </div>
-                <div class="flex min-h-0 flex-1 flex-col">
+                <div :class="current === '/topology' ? 'flex min-h-0 flex-1 flex-col' : ''">
                     <PageSkeleton v-if="navigating" :kind="skeletonKind" />
                     <slot v-else />
                 </div>

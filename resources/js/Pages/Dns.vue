@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import AppLayout from '../Layouts/AppLayout.vue';
 import PagedTable from '../Components/PagedTable.vue';
+import SegmentTabs from '../Components/SegmentTabs.vue';
 import SiteMark from '../Components/SiteMark.vue';
 import PreviewBinder from '../Components/PreviewBinder.vue';
 import SortHead from '../Components/SortHead.vue';
@@ -120,8 +121,7 @@ function rank(rows, nameOf, siteOf) {
             queries: item.queries,
             site: [...item.sites.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || '',
         }))
-        .sort((left, right) => right.users - left.users || right.queries - left.queries)
-        .slice(0, 8);
+        .sort((left, right) => right.users - left.users || right.queries - left.queries);
 }
 
 const apps = computed(() => rank(
@@ -140,6 +140,16 @@ const links = computed(() => rank(
     (row) => registrable(row.domain),
 ));
 const siteForApp = (name) => apps.value.find((item) => item.name === name)?.site || '';
+const storedTab = localStorage.getItem('dns.tab');
+const tab = ref(['apps', 'browsers', 'links'].includes(storedTab) ? storedTab : 'apps');
+watch(tab, (value) => localStorage.setItem('dns.tab', value));
+const tabOptions = computed(() => [
+    { id: 'apps', label: apps.value.length ? `Aplikasi (${apps.value.length})` : 'Aplikasi' },
+    { id: 'browsers', label: browsers.value.length ? `Browser (${browsers.value.length})` : 'Browser' },
+    { id: 'links', label: links.value.length ? `Tautan (${links.value.length})` : 'Tautan' },
+]);
+const activeRank = computed(() => (tab.value === 'browsers' ? browsers.value : tab.value === 'links' ? links.value : apps.value));
+const emptyRank = computed(() => (tab.value === 'browsers' ? 'Browser belum ketahuan.' : tab.value === 'links' ? 'Belum ada tautan.' : 'Belum ada aplikasi.'));
 
 const columnLabels = {
     host: 'Perangkat',
@@ -219,24 +229,23 @@ const deviceLabel = (row) => row.host || row.address || '';
         </article>
     </section>
 
-    <section class="mt-3 grid gap-3 lg:grid-cols-3">
-        <article v-for="panel in [{ title: 'Aplikasi', rows: apps, empty: 'Belum ada aplikasi.' }, { title: 'Browser', rows: browsers, empty: 'Browser belum ketahuan.' }, { title: 'Tautan', rows: links, empty: 'Belum ada tautan.' }]" :key="panel.title" class="noc-card p-3">
-            <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">{{ panel.title }}</p>
-            <ul v-if="panel.rows.length" class="mt-2 divide-y divide-line">
-                <li v-for="item in panel.rows" :key="item.name" class="flex items-center gap-2.5 py-2">
-                    <SiteMark :domain="item.site" :label="item.name" />
-                    <div class="min-w-0 flex-1">
-                        <p class="truncate text-sm font-medium">{{ item.name }}</p>
-                        <p class="font-mono text-[10px] text-mute">{{ item.queries }} query</p>
-                    </div>
-                    <p class="shrink-0 text-right">
-                        <span class="block text-sm font-semibold">{{ item.users }}</span>
-                        <span class="block text-[10px] text-mute">pengguna</span>
-                    </p>
-                </li>
-            </ul>
-            <p v-else class="mt-3 font-mono text-[11px] text-mute">{{ panel.empty }}</p>
-        </article>
+    <SegmentTabs v-model="tab" class="mt-3" :options="tabOptions" />
+
+    <section class="noc-card mt-3 p-3">
+        <ul v-if="activeRank.length" class="divide-y divide-line">
+            <li v-for="item in activeRank" :key="item.name" class="flex items-center gap-2.5 py-2.5">
+                <SiteMark :domain="item.site" :label="item.name" />
+                <div class="min-w-0 flex-1">
+                    <p class="truncate text-sm font-medium">{{ item.name }}</p>
+                    <p class="font-mono text-[10px] text-mute">{{ item.queries }} query</p>
+                </div>
+                <p class="shrink-0 text-right">
+                    <span class="block text-sm font-semibold">{{ item.users }}</span>
+                    <span class="block text-[10px] text-mute">pengguna</span>
+                </p>
+            </li>
+        </ul>
+        <p v-else class="py-6 text-center font-mono text-[11px] text-mute">{{ emptyRank }}</p>
     </section>
 
     <p class="mt-3 font-mono text-[11px] text-mute">Jumlah pengguna dihitung dari alamat yang menanyakan domain itu. Aplikasi ditebak dari domain. Browser hanya muncul kalau domainnya khas browser itu. Logo diambil dari situs itu sendiri.</p>
