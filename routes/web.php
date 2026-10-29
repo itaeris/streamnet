@@ -1,0 +1,31 @@
+<?php
+
+use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\BandwidthController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DhcpController;
+use App\Http\Controllers\DnsController;
+use App\Http\Controllers\LogController;
+use App\Http\Controllers\MikrotikSessionController;
+use App\Http\Controllers\SecurityController;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [LoginController::class, 'create'])->name('login');
+    Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:6,1');
+});
+
+Route::middleware('auth')->group(function () {
+    Route::get('/', DashboardController::class)->name('dashboard');
+    Route::get('/bandwidth', BandwidthController::class)->name('bandwidth');
+    Route::get('/dhcp', DhcpController::class)->name('dhcp');
+    Route::get('/dns', DnsController::class)->name('dns');
+    Route::get('/logs', LogController::class)->name('logs');
+    Route::get('/security', SecurityController::class)->name('security');
+    Route::get('/pengaturan', [MikrotikSessionController::class, 'index'])->name('settings');
+    Route::post('/pengaturan/sesi', [MikrotikSessionController::class, 'store'])->name('settings.sessions.store');
+    Route::put('/pengaturan/sesi/{mikrotikSession}', [MikrotikSessionController::class, 'update'])->name('settings.sessions.update');
+    Route::delete('/pengaturan/sesi/{mikrotikSession}', [MikrotikSessionController::class, 'destroy'])->name('settings.sessions.destroy');
+    Route::post('/pengaturan/sesi/{mikrotikSession}/aktif', [MikrotikSessionController::class, 'activate'])->name('settings.sessions.activate');
+    Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
+});
