@@ -80,6 +80,7 @@ const titles = {
     '/logs': 'Log Stream',
     '/pengaturan': 'Pengaturan',
     '/pengaturan/sesi': 'Pengaturan',
+    '/pengaturan/unifi': 'Pengaturan',
 };
 
 const { pulse, connected } = usePulse(() => page.props.pulse ?? null);

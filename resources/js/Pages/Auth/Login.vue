@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue';
+import ToggleSwitch from '../../Components/ToggleSwitch.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { useTheme } from '../../composables/useTheme';
 
@@ -166,10 +167,7 @@ const errorText = () => form.errors.email || form.errors.password || '';
                         </span>
                     </label>
 
-                    <label class="flex w-fit cursor-pointer items-center gap-2 text-sm text-mist select-none">
-                        <input v-model="form.remember" type="checkbox" class="size-4 rounded accent-cyan-2">
-                        Ingat sesi ini
-                    </label>
+                    <ToggleSwitch v-model="form.remember" label="Ingat sesi ini" />
 
                     <button
                         type="submit"

@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../Layouts/AppLayout.vue';
 import DataTable from '../Components/DataTable.vue';
 import LiveRate from '../Components/LiveRate.vue';
@@ -12,7 +12,7 @@ defineOptions({ layout: AppLayout });
 
 const props = defineProps({
     pulse: { type: Object, default: null },
-    unifi: { type: Object, default: () => ({ ok: false, error: 'Belum ada data.' }) },
+    unifi: { type: Object, default: () => ({ ok: false, configured: false, error: null }) },
 });
 
 const { open, preview, isOpen } = usePreview();
@@ -199,12 +199,19 @@ const clientColumns = [
 
     <PreviewBinder :value="activeItem()" />
 
-    <div v-if="!unifi?.ok" class="noc-card flex items-start gap-3 p-4">
-        <Icon class="mt-0.5 text-[20px] text-danger" name="error" />
-        <div>
-            <p class="text-sm font-semibold">UniFi tidak bisa dibaca</p>
-            <p class="mt-1 text-sm text-mist">{{ unifi?.error || 'Tidak ada data.' }}</p>
-        </div>
+    <div v-if="!unifi?.ok" class="noc-card flex flex-col items-center px-6 py-14 text-center">
+        <span class="flex size-12 items-center justify-center rounded-2xl bg-tile text-mute">
+            <Icon class="text-[24px]" name="wifi" />
+        </span>
+        <p class="mt-4 text-[15px] font-semibold">Belum terhubung ke UniFi</p>
+        <p class="mt-1 max-w-md text-sm text-mist">
+            {{ unifi?.configured ? 'Console UniFi belum bisa dihubungi. Cek alamat, API key, atau koneksi ke console.' : 'Hubungkan console UniFi untuk melihat access point dan klien WiFi di sini.' }}
+        </p>
+        <p v-if="unifi?.configured && unifi?.error" class="mt-2 font-mono text-[11px] text-mute">{{ unifi.error }}</p>
+        <Link href="/pengaturan/unifi" class="mt-5 inline-flex h-10 items-center gap-2 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640]">
+            <Icon class="text-[16px]" name="settings" />
+            {{ unifi?.configured ? 'Periksa pengaturan UniFi' : 'Hubungkan di Pengaturan' }}
+        </Link>
     </div>
 
     <template v-else>

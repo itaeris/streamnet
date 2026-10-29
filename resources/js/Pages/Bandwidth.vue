@@ -102,13 +102,13 @@ const visibleIfaces = (live, query) => {
                     />
                 </label>
                 <p class="font-mono text-sm">
-                    <span class="text-cyan">↓ <LiveRate :value="rateFor(live, selected)?.rx_bps" /></span>
+                    <span class="text-cyan">↓ <LiveRate :key="`${selected}-rx`" :value="rateFor(live, selected)?.rx_bps" /></span>
                     <span class="mx-2 text-line">/</span>
-                    <span class="text-ok">↑ <LiveRate :value="rateFor(live, selected)?.tx_bps" /></span>
+                    <span class="text-ok">↑ <LiveRate :key="`${selected}-tx`" :value="rateFor(live, selected)?.tx_bps" /></span>
                 </p>
             </div>
             <div class="mt-3 rounded bg-sink p-2">
-                <TrafficChart :points="charts[selected] || []" axis height-class="h-64" />
+                <TrafficChart :key="selected" :points="charts[selected] || []" axis height-class="h-64" />
             </div>
         </article>
 

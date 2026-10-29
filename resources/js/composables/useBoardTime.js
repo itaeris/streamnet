@@ -13,7 +13,7 @@ export const ranges = [
     { minutes: 2880, label: 'Last 2 days' },
 ];
 
-export const boardPaths = ['/', '/bandwidth', '/dhcp', '/dns', '/logs', '/security', '/pengaturan', '/pengaturan/sesi'];
+export const boardPaths = ['/', '/bandwidth', '/dhcp', '/dns', '/logs', '/security', '/pengaturan', '/pengaturan/sesi', '/pengaturan/unifi'];
 
 export const refreshes = [
     { id: 'off', label: 'Off', seconds: 0 },
@@ -41,7 +41,7 @@ function stored(key, fallback) {
 const storedMinutes = Number(stored('board.minutes', '30'));
 export const rangeMinutes = ref(ranges.some((item) => item.minutes === storedMinutes) ? storedMinutes : 30);
 export const refreshId = ref(refreshes.some((item) => item.id === stored('board.refresh', 'auto')) ? stored('board.refresh', 'auto') : 'auto');
-export const live = ref(stored('board.live', '0') === '1');
+export const live = ref(stored('board.live', '1') === '1');
 export const pinned = ref(null);
 
 let lastAccepted = 0;
@@ -64,6 +64,7 @@ const liveProps = {
     '/security': ['events'],
     '/pengaturan': [],
     '/pengaturan/sesi': ['sessions'],
+    '/pengaturan/unifi': [],
 };
 
 function livePropsFor(url) {

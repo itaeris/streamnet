@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\UnifiConnection;
 use App\Models\User;
 use App\Services\Unifi\UnifiClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -70,6 +71,53 @@ class AccessPointTest extends TestCase
         $this->assertSame(12.5, $device['radios'][0]['retries']);
         $this->assertSame('Nano HD Lantai 1', $snapshot['clients'][0]['uplink']);
         Http::assertSent(fn ($request) => $request->hasHeader('X-API-KEY', 'test-key'));
+    }
+
+    public function test_without_a_connection_the_page_says_not_connected(): void
+    {
+        config(['unifi.url' => '', 'unifi.api_key' => '']);
+        Http::fake();
+
+        $this->actingAs(User::factory()->create())
+            ->get('/access-points')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('unifi.ok', false)
+                ->where('unifi.configured', false));
+        $this->assertSame([], Http::recorded()->map(fn ($pair) => $pair[0]->url())->filter(fn ($url) => str_contains($url, 'unifi') || str_contains($url, 'integration'))->values()->all());
+    }
+
+    public function test_settings_save_the_console_and_keep_the_key_hidden(): void
+    {
+        config(['unifi.url' => '', 'unifi.api_key' => '']);
+        Http::fake(['*' => Http::response(['data' => []])]);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->put('/pengaturan/unifi', [
+                'url' => 'https://unifi.example.test/',
+                'api_key' => 'secret-unifi-key',
+                'site' => '',
+                'verify_tls' => true,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $connection = UnifiConnection::query()->firstOrFail();
+        $this->assertSame('https://unifi.example.test', $connection->url);
+        $this->assertSame('secret-unifi-key', $connection->api_key);
+        $this->assertNotSame('secret-unifi-key', $connection->getRawOriginal('api_key'));
+
+        $this->actingAs($user)
+            ->put('/pengaturan/unifi', ['url' => 'https://unifi.example.test', 'api_key' => '', 'verify_tls' => false])
+            ->assertSessionHasNoErrors();
+        $this->assertSame('secret-unifi-key', $connection->fresh()->api_key);
+        $this->assertFalse($connection->fresh()->verify_tls);
+
+        $this->actingAs($user)
+            ->get('/pengaturan/unifi')
+            ->assertOk()
+            ->assertDontSee('secret-unifi-key', false);
     }
 
     public function test_rejected_key_is_reported_without_crashing_the_page(): void

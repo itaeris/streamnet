@@ -86,14 +86,9 @@ Port API atau REST router harus bisa dijangkau dari mesin yang menjalankan `mikr
 
 ## UniFi
 
-Menu **Access Points** membaca UniFi Network Integration API (`/proxy/network/integration/v1`) dari console UniFi OS. Buat API key di UniFi Network → Settings → Control Plane → Integrations.
+Menu **Access Points** membaca UniFi Network Integration API (`/proxy/network/integration/v1`) dari console UniFi OS. Hubungkan di **Pengaturan → UniFi**: alamat console, API key (disimpan terenkripsi), site, dan verifikasi TLS. Buat API key di UniFi Network → Settings → Control Plane → Integrations.
 
-| Variabel | Fungsi |
-| --- | --- |
-| `UNIFI_URL` | Alamat console, misalnya `https://unifi.contoh.id`. |
-| `UNIFI_API_KEY` | API key integrasi. Hanya disimpan di `.env`. |
-| `UNIFI_SITE` | ID, nama, atau `default`. Kosongkan untuk site pertama. |
-| `UNIFI_VERIFY_TLS` | `false` kalau console memakai sertifikat self-signed. |
+Kalau belum dihubungkan atau console tidak bisa dijangkau, halaman Access Points menampilkan "Belum terhubung" dengan tautan ke pengaturan.
 
 Data AP, statistik, dan klien di-cache 10 detik (`UNIFI_CACHE_SECONDS`), jadi reload Live tidak membanjiri console.
 

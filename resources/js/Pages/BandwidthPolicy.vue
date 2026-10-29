@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '../Layouts/AppLayout.vue';
+import ToggleSwitch from '../Components/ToggleSwitch.vue';
 import DataTable from '../Components/DataTable.vue';
 import LiveRate from '../Components/LiveRate.vue';
 import PreviewBinder from '../Components/PreviewBinder.vue';
@@ -550,10 +551,7 @@ const steps = [
                         <input v-model="form.target" placeholder="10.10.10.0/24" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 font-mono text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
                     </label>
 
-                    <label class="flex items-center gap-2 text-sm text-mist sm:col-span-2">
-                        <input v-model="form.burst" type="checkbox" class="size-4 accent-cyan-2">
-                        Izinkan burst: boleh lebih cepat sebentar (buka web, unduhan kecil), lalu turun ke batas
-                    </label>
+                    <ToggleSwitch v-model="form.burst" class="sm:col-span-2" label="Izinkan burst" hint="Boleh lebih cepat sebentar (buka web, unduhan kecil), lalu turun ke batas." />
                     <template v-if="form.burst">
                         <label class="block text-[12px] font-medium text-mist">
                             Burst download

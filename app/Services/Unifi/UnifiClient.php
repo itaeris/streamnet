@@ -2,6 +2,7 @@
 
 namespace App\Services\Unifi;
 
+use App\Models\UnifiConnection;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -14,9 +15,23 @@ class UnifiClient
 {
     private const BASE = '/proxy/network/integration/v1';
 
+    private ?UnifiConnection $connection = null;
+
     public function configured(): bool
     {
-        return config('unifi.url') !== '' && config('unifi.api_key') !== '';
+        return $this->connection() !== null;
+    }
+
+    public function forget(): void
+    {
+        Cache::forget('unifi.snapshot');
+        Cache::forget('unifi.sites');
+        $this->connection = null;
+    }
+
+    private function connection(): ?UnifiConnection
+    {
+        return $this->connection ??= UnifiConnection::current();
     }
 
     /**
@@ -27,7 +42,7 @@ class UnifiClient
     public function snapshot(): array
     {
         if (! $this->configured()) {
-            return ['ok' => false, 'error' => 'UNIFI_URL dan UNIFI_API_KEY belum diisi di .env.'];
+            return ['ok' => false, 'configured' => false, 'error' => null];
         }
 
         $cached = Cache::get('unifi.snapshot');
@@ -39,7 +54,7 @@ class UnifiClient
             $snapshot = $this->fetch();
             Cache::put('unifi.snapshot', $snapshot, max(1, (int) config('unifi.cache_seconds')));
         } catch (Throwable $exception) {
-            $snapshot = ['ok' => false, 'error' => $exception->getMessage()];
+            $snapshot = ['ok' => false, 'configured' => true, 'error' => $exception->getMessage()];
             Cache::put('unifi.snapshot', $snapshot, 5);
         }
 
@@ -88,6 +103,7 @@ class UnifiClient
 
         return [
             'ok' => true,
+            'configured' => true,
             'site' => ['id' => $site['id'], 'name' => $site['name'] ?? 'Default'],
             'fetched_at' => now()->toIso8601String(),
             'devices' => $mappedDevices,
@@ -153,7 +169,7 @@ class UnifiClient
      */
     private function site(): array
     {
-        $wanted = strtolower(trim((string) config('unifi.site')));
+        $wanted = strtolower(trim((string) $this->connection()?->site));
         $sites = Cache::remember('unifi.sites', 3600, fn () => $this->list('/sites'));
 
         foreach ($sites as $site) {
@@ -188,15 +204,15 @@ class UnifiClient
     private function prepare(PendingRequest $request): PendingRequest
     {
         return $request
-            ->withHeaders(['X-API-KEY' => (string) config('unifi.api_key')])
+            ->withHeaders(['X-API-KEY' => (string) $this->connection()?->api_key])
             ->acceptJson()
             ->timeout(max(1, (int) config('unifi.timeout')))
-            ->withOptions(['verify' => (bool) config('unifi.verify_tls')]);
+            ->withOptions(['verify' => (bool) ($this->connection()?->verify_tls ?? true)]);
     }
 
     private function url(string $path): string
     {
-        return config('unifi.url').self::BASE.$path;
+        return rtrim((string) $this->connection()?->url, '/').self::BASE.$path;
     }
 
     /**
