@@ -1,0 +1,172 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.composer/cache
+            vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Prepare app
+        run: cp .env.example .env && php artisan key:generate --ansi
+
+      - name: Test
+        run: php artisan test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Frontend Reverb build args
+        env:
+          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$BACKEND_ENV" > "$RUNNER_TEMP/backend.env"
+          field() {
+            awk -F= -v k="$1" '$1 == k { sub(/^[^=]*=/, ""); print; exit }' "$RUNNER_TEMP/backend.env"
+          }
+          strip() {
+            sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+          }
+          expand() {
+            local value="$1" name replacement i
+            for i in 1 2 3 4 5; do
+              if [[ ! "$value" =~ \$\{([A-Za-z_][A-Za-z0-9_]*)\} ]]; then
+                break
+              fi
+              name="${BASH_REMATCH[1]}"
+              replacement="$(field "$name" | strip || true)"
+              value="${value//\$\{${name}\}/${replacement}}"
+            done
+            printf '%s' "$value"
+          }
+          key="$(expand "$(field VITE_REVERB_APP_KEY | strip || true)")"
+          if [ -z "$key" ] || [[ "$key" == *'${'* ]]; then
+            key="$(expand "$(field REVERB_APP_KEY | strip || true)")"
+          fi
+          port="$(field VITE_REVERB_PORT | strip || true)"
+          scheme="$(field VITE_REVERB_SCHEME | strip || true)"
+          if [ -n "$key" ]; then
+            echo "::add-mask::$key"
+          fi
+          {
+            echo "VITE_REVERB_APP_KEY=${key}"
+            echo "VITE_REVERB_PORT=${port:-443}"
+            echo "VITE_REVERB_SCHEME=${scheme:-https}"
+          } >> "$GITHUB_ENV"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            itaeris/streamnet_app:latest
+            itaeris/streamnet_app:${{ github.sha }}
+          build-args: |
+            VITE_REVERB_APP_KEY=${{ env.VITE_REVERB_APP_KEY }}
+            VITE_REVERB_PORT=${{ env.VITE_REVERB_PORT }}
+            VITE_REVERB_SCHEME=${{ env.VITE_REVERB_SCHEME }}
+          cache-from: type=gha,scope=streamnet-app
+          cache-to: type=gha,scope=streamnet-app,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Encode backend env
+        id: envfile
+        env:
+          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$BACKEND_ENV" | base64 -w0 > "$RUNNER_TEMP/backend.b64"
+          echo "b64<<EOF" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/backend.b64" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          BACKEND_ENV_B64: ${{ steps.envfile.outputs.b64 }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          IMAGE: itaeris/streamnet_app:${{ github.sha }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: BACKEND_ENV_B64,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,IMAGE
+          script_stop: true
+          script: |
+            set -euo pipefail
+            mkdir -p /opt/streamnet
+            umask 077
+            printf '%s' "$BACKEND_ENV_B64" | base64 -d > /opt/streamnet/.env
+            chmod 600 /opt/streamnet/.env
+            docker network inspect streamnet-network >/dev/null 2>&1 || docker network create streamnet-network
+            printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin >/dev/null
+            docker pull "$IMAGE"
+            if docker ps -a --format '{{.Names}}' | grep -qx streamnet_app; then
+              docker stop streamnet_app
+              docker rm streamnet_app
+            fi
+            docker run -d \
+              --name streamnet_app \
+              --restart unless-stopped \
+              --network streamnet-network \
+              --env-file /opt/streamnet/.env \
+              -p 2700:2700 \
+              "$IMAGE"
+            ok=0
+            for _ in $(seq 1 24); do
+              if docker exec streamnet_app curl -fsS http://127.0.0.1:2700/up >/dev/null; then
+                ok=1
+                break
+              fi
+              sleep 5
+            done
+            if [ "$ok" != 1 ]; then
+              docker logs --tail 120 streamnet_app || true
+              exit 1
+            fi

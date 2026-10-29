@@ -54,8 +54,8 @@ Akun operator dibuat saat seed dari:
 
 | Variabel | Fungsi |
 | --- | --- |
-| `DASHBOARD_EMAIL` | Email login. Bawaan `wiki@localhost`. |
-| `DASHBOARD_PASSWORD` | Password login. Bawaan `change-me` kalau kosong. |
+| `DASHBOARD_EMAIL` | Email login. Bawaan `it@aerisbeaute.com`. |
+| `DASHBOARD_PASSWORD` | Password login. Kalau kosong, seeder memakai password bawaannya. |
 
 ## Sesi MikroTik
 
@@ -110,3 +110,11 @@ Data AP, statistik, dan klien di-cache 10 detik (`UNIFI_CACHE_SECONDS`), jadi re
 ```bash
 composer test
 ```
+
+## Deploy
+
+Push ke `main` menjalankan `.github/workflows/deploy.yml`: tes, build image `itaeris/streamnet_app`, lalu di server container lama `streamnet_app` di-stop dan dihapus sebelum container baru jalan di port `2700` pada network `streamnet-network`. MySQL tidak dibuat ulang. `DB_HOST` di secret `BACKEND_ENV` harus nama container MySQL yang sudah ada, dan container itu harus sudah tersambung ke `streamnet-network`.
+
+Saat container mulai, `php artisan migrate --force` hanya menambah migrasi yang belum tercatat. `AdminUserSeeder` membuat user dari `DASHBOARD_EMAIL` dan `DASHBOARD_PASSWORD` sekali. Deploy berikutnya tidak menimpa password.
+
+Nginx di dalam container mendengarkan `2700` dan meneruskan websocket `/app` ke Reverb. Arahkan `https://stream.aeris-fti.com` ke `127.0.0.1:2700`. Di `BACKEND_ENV` produksi, set `APP_URL=https://stream.aeris-fti.com`, `REVERB_HOST=127.0.0.1`, `REVERB_PORT=8080`, `REVERB_SCHEME=http`, `VITE_REVERB_SCHEME=https`, `VITE_REVERB_PORT=443`, dan `VITE_REVERB_APP_KEY` sama dengan `REVERB_APP_KEY`. `VITE_REVERB_*` ikut ter-bake saat image di-build.
