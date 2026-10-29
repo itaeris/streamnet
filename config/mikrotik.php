@@ -14,6 +14,11 @@ return [
 
     'poll_seconds' => (int) env('MIKROTIK_POLL_SECONDS', 5),
 
+    // Per-client rates after the queue, measured with Torch on the LAN interface.
+    'torch' => (bool) env('MIKROTIK_TORCH', true),
+    'torch_seconds' => (int) env('MIKROTIK_TORCH_SECONDS', 5),
+    'lan_interface' => (string) env('MIKROTIK_LAN_INTERFACE', ''),
+
     'wan_interface' => env('MIKROTIK_WAN_INTERFACE', 'ether1-ISP'),
 
     'connection_warning' => (int) env('MIKROTIK_CONNECTION_WARNING', 8000),

@@ -11,7 +11,7 @@ import { live as boardLive, ranges } from '../composables/useBoardTime';
 import { useBoardPulse } from '../composables/usePulse';
 import { usePreview } from '../composables/usePreview';
 import { aliasOf } from '../composables/useLeaseAlias';
-import { durationSeconds } from '../lib/format';
+import { durationSeconds, formatRate } from '../lib/format';
 import { inWindow } from '../lib/time';
 
 defineOptions({ layout: AppLayout });
@@ -39,6 +39,14 @@ const rangeLabel = computed(() => {
 });
 
 const status = ref('all');
+const measuredLabel = (pulse) => {
+    const lease = (pulse?.leases ?? []).find((row) => row.measured);
+    if (lease?.measured === 'queue') {
+        return `= diterima klien (setelah queue, Torch ${lease.measured_on || 'LAN'})`;
+    }
+
+    return '= masuk dari internet (sebelum queue)';
+};
 const dnsByAddress = ref({});
 const { open, preview, isOpen } = usePreview();
 const show = (value) => (value === null || value === undefined || value === '' ? '–' : String(value));
@@ -134,7 +142,14 @@ function leasePreview(lease, sampledAt = null) {
                         { label: 'Dynamic', value: lease.dynamic ? 'yes' : 'no' },
                         { label: 'Blocked', value: blocked ? 'yes' : 'no', tone: blocked ? 'danger' : 'ok' },
                     ],
-                }],
+                }, ...(lease.measured === 'queue' ? [{
+                    title: 'Bandwidth',
+                    rows: [
+                        { label: 'Diterima klien', value: `↓ ${formatRate(lease.rx_bps)} · ↑ ${formatRate(lease.tx_bps)}`, tone: 'cyan' },
+                        { label: 'Masuk dari internet', value: `↓ ${formatRate(lease.wan_rx_bps)} · ↑ ${formatRate(lease.wan_tx_bps)}` },
+                        { label: 'Dipotong queue', value: formatRate(Math.max(0, (Number(lease.wan_rx_bps) || 0) - (Number(lease.rx_bps) || 0))) },
+                    ],
+                }] : [])],
             },
             {
                 id: 'lease',
@@ -328,7 +343,7 @@ const sortColumns = [
             </article>
         </section>
 
-        <p class="mt-3 font-mono text-[11px] text-mute">{{ rangeLabel }} · last seen</p>
+        <p class="mt-3 font-mono text-[11px] text-mute">{{ rangeLabel }} · last seen · Download/Upload {{ measuredLabel(live) }}</p>
 
         <SegmentTabs v-model="status" class="mt-3" :options="filters" />
 

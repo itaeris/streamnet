@@ -24,6 +24,7 @@ class MikrotikPoller
         private MikrotikClient $client,
         private MikrotikSessionRegistry $sessions,
         private DnsActivity $dns,
+        private DeliveredRates $delivered,
     ) {}
 
     /**
@@ -134,7 +135,10 @@ class MikrotikPoller
         $payload['system'] = $system;
         $payload['wan'] = $this->wan($interfaces);
         if (is_array($batch['host_traffic'] ?? null) && is_array($payload['leases'] ?? null)) {
-            $payload['leases'] = $this->attachHostRates($payload['leases'], $batch['host_traffic']);
+            $payload['leases'] = $this->delivered->attach(
+                $this->attachHostRates($payload['leases'], $batch['host_traffic']),
+                $this->delivered->latest($session->id),
+            );
         }
         $payload['interfaces'] = array_map(fn (array $row) => [
             'name' => $row['name'],
@@ -198,6 +202,8 @@ class MikrotikPoller
                 'services' => ['path' => 'ip/service'],
                 'connections' => ['method' => 'post', 'path' => 'ip/firewall/connection/print', 'body' => ['count-only' => '']],
                 'host_traffic' => ['path' => 'ip/firewall/connection', 'body' => ['.proplist' => 'src-address,dst-address,orig-rate,repl-rate']],
+                'queues' => ['path' => 'queue/simple', 'body' => ['.proplist' => '.id,name,target,max-limit,queue,rate,pcq-queues,dropped,disabled,dynamic,comment']],
+                'queue_types' => ['path' => 'queue/type'],
             ], $session->connection());
         } catch (Throwable $exception) {
             return $this->offline($exception->getMessage());
@@ -294,7 +300,10 @@ class MikrotikPoller
                 ], $interfaceRows));
             }
 
-            $leases = $this->attachHostRates($this->syncLeases($batch['leases'] ?? null), $batch['host_traffic'] ?? null);
+            $leases = $this->delivered->attach(
+                $this->attachHostRates($this->syncLeases($batch['leases'] ?? null), $batch['host_traffic'] ?? null),
+                $this->delivered->latest($this->router->id),
+            );
             $logs = $this->syncLogs($batch['logs'] ?? null, $sampledAt);
             $services = $batch['services'] === null
                 ? ($previousPayload['security']['services'] ?? [])
@@ -320,6 +329,11 @@ class MikrotikPoller
             );
 
             $this->storeNewFindings($findings, $previousPayload['security']['findings'] ?? [], $sampledAt);
+
+            $shaping = $batch['queues'] === null || $batch['queue_types'] === null
+                ? ($previousPayload['shaping'] ?? null)
+                : $this->mapShaping($batch['queues'], $batch['queue_types'], $batch['filter'] ?? null);
+            $this->trackBandwidthHogs($leases, is_array($shaping) ? $shaping : null, $sampledAt);
 
             $leaseSummary = [
                 'total' => count($leases),
@@ -358,6 +372,7 @@ class MikrotikPoller
                 'leases' => $leases,
                 'lease_summary' => $leaseSummary,
                 'logs' => array_slice($logs, 0, 40),
+                'shaping' => $shaping,
                 'security' => [
                     'connections' => $connections,
                     'sessions' => $sessions,
@@ -925,6 +940,154 @@ class MikrotikPoller
             'dynamic' => $this->flag($row['dynamic'] ?? false),
             'disabled' => $this->flag($row['disabled'] ?? false),
         ], $this->rows($json));
+    }
+
+    /**
+     * Simple queues, PCQ types, and whether FastTrack would bypass them.
+     *
+     * @return array<string, mixed>
+     */
+    private function mapShaping(mixed $queues, mixed $types, mixed $filter): array
+    {
+        $pcq = [];
+        foreach ($this->rows($types) as $row) {
+            if (($row['kind'] ?? '') !== 'pcq') {
+                continue;
+            }
+
+            $name = (string) ($row['name'] ?? '');
+            $pcq[$name] = [
+                'id' => (string) ($row['.id'] ?? ''),
+                'name' => $name,
+                'classifier' => (string) ($row['pcq-classifier'] ?? ''),
+                'rate' => $this->bits($row['pcq-rate'] ?? 0),
+                'burst_rate' => $this->bits($row['pcq-burst-rate'] ?? 0),
+                'burst_threshold' => $this->bits($row['pcq-burst-threshold'] ?? 0),
+                'burst_time' => (string) ($row['pcq-burst-time'] ?? ''),
+                'default' => $this->flag($row['default'] ?? false),
+            ];
+        }
+
+        $mapped = [];
+        foreach ($this->rows($queues) as $row) {
+            if ($this->flag($row['dynamic'] ?? false)) {
+                continue;
+            }
+
+            [$upType, $downType] = array_pad(explode('/', (string) ($row['queue'] ?? ''), 2), 2, '');
+            [$maxUp, $maxDown] = $this->pair($row['max-limit'] ?? '');
+            [$rateUp, $rateDown] = $this->pair($row['rate'] ?? '');
+            [$usersUp, $usersDown] = $this->pair($row['pcq-queues'] ?? '');
+            [$droppedUp, $droppedDown] = $this->pair($row['dropped'] ?? '');
+
+            $mapped[] = [
+                'id' => (string) ($row['.id'] ?? ''),
+                'name' => (string) ($row['name'] ?? ''),
+                'target' => (string) ($row['target'] ?? ''),
+                'comment' => (string) ($row['comment'] ?? ''),
+                'disabled' => $this->flag($row['disabled'] ?? false),
+                'up_type' => $upType,
+                'down_type' => $downType,
+                'pcq' => isset($pcq[$upType], $pcq[$downType]),
+                'max_up' => $maxUp,
+                'max_down' => $maxDown,
+                'rate_up' => $rateUp,
+                'rate_down' => $rateDown,
+                'users_up' => $usersUp,
+                'users_down' => $usersDown,
+                'dropped_up' => $droppedUp,
+                'dropped_down' => $droppedDown,
+            ];
+        }
+
+        $main = collect($mapped)->first(fn (array $queue) => $queue['pcq'] && ! $queue['disabled']);
+        $fasttrack = collect($this->rows($filter))->contains(fn (array $rule) => ($rule['action'] ?? '') === 'fasttrack-connection'
+            && ! $this->flag($rule['disabled'] ?? false));
+
+        return [
+            'main' => $main,
+            'down_type' => $main ? $pcq[$main['down_type']] : null,
+            'up_type' => $main ? $pcq[$main['up_type']] : null,
+            'queues' => $mapped,
+            'pcq_types' => array_values($pcq),
+            'fasttrack' => $fasttrack,
+        ];
+    }
+
+    /**
+     * Log an incident when one client keeps taking most of the shaped capacity.
+     *
+     * @param  array<int, array<string, mixed>>  $leases
+     * @param  array<string, mixed>|null  $shaping
+     */
+    private function trackBandwidthHogs(array $leases, ?array $shaping, Carbon $sampledAt): void
+    {
+        $capacity = (int) ($shaping['main']['max_down'] ?? 0);
+        $cap = (int) ($shaping['down_type']['rate'] ?? 0);
+        $threshold = $cap > 0 ? (int) ($cap * 0.9) : (int) ($capacity * 0.5);
+        if ($threshold <= 0) {
+            return;
+        }
+
+        foreach ($leases as $lease) {
+            $address = (string) ($lease['address'] ?? '');
+            $rate = (int) ($lease['rx_bps'] ?? 0);
+            $streak = "mikrotik.{$this->router->id}.hog.{$address}";
+
+            if ($address === '' || $rate < $threshold) {
+                Cache::forget($streak);
+
+                continue;
+            }
+
+            $count = (int) Cache::get($streak, 0) + 1;
+            Cache::put($streak, $count, 60);
+            $cooldown = "{$streak}.logged";
+            if ($count < 3 || Cache::has($cooldown)) {
+                continue;
+            }
+
+            Cache::put($cooldown, true, 600);
+            $who = trim(($lease['comment'] ?? '') ?: ($lease['host'] ?? '')) ?: $address;
+            $share = $capacity > 0 ? round($rate / $capacity * 100) : null;
+
+            SecurityEvent::query()->create([
+                'mikrotik_session_id' => $this->router->id,
+                'occurred_at' => $sampledAt,
+                'severity' => $cap > 0 ? 'info' : 'warning',
+                'category' => 'bandwidth',
+                'title' => $cap > 0 ? 'Klien menyentuh batas bandwidth' : 'Klien memakai bandwidth besar',
+                'detail' => sprintf(
+                    '%s (%s) download %.1f Mbps%s',
+                    $who,
+                    $address,
+                    $rate / 1_000_000,
+                    $share !== null ? " · {$share}% kapasitas" : '',
+                ),
+            ]);
+        }
+    }
+
+    /**
+     * @return array{0: int, 1: int}
+     */
+    private function pair(mixed $value): array
+    {
+        [$up, $down] = array_pad(explode('/', (string) $value, 2), 2, '0');
+
+        return [$this->bits($up), $this->bits($down)];
+    }
+
+    private function bits(mixed $value): int
+    {
+        $text = strtolower(trim((string) $value));
+        if (! preg_match('/^(\d+(?:\.\d+)?)([kmg]?)/', $text, $match)) {
+            return 0;
+        }
+
+        $scale = ['' => 1, 'k' => 1_000, 'm' => 1_000_000, 'g' => 1_000_000_000][$match[2]];
+
+        return (int) round((float) $match[1] * $scale);
     }
 
     /**

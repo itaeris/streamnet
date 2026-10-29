@@ -70,6 +70,9 @@ Variabel `MIKROTIK_*` hanya membuat **sesi pertama**, dan hanya kalau belum ada 
 | `MIKROTIK_WAN_INTERFACE` | Interface WAN. Kosongkan supaya dipilih otomatis. |
 | `MIKROTIK_TIMEOUT` | Batas waktu permintaan, detik. |
 | `MIKROTIK_POLL_SECONDS` | Jeda antar giliran polling. Minimum 2 detik. |
+| `MIKROTIK_TORCH` | `true` supaya rate per klien diukur setelah queue (Torch di interface LAN, proses `mikrotik:torch`). |
+| `MIKROTIK_TORCH_SECONDS` | Jeda antar pengukuran Torch. Bawaan 5 detik, tiap pengukuran 2 detik. |
+| `MIKROTIK_LAN_INTERFACE` | Paksa interface LAN untuk Torch. Kosongkan supaya dicari dari subnet lease. |
 | `MIKROTIK_CONNECTION_WARNING` | Ambang conntrack peringatan. |
 | `MIKROTIK_CONNECTION_CRITICAL` | Ambang conntrack kritis. |
 
@@ -102,6 +105,7 @@ Data AP, statistik, dan klien di-cache 10 detik (`UNIFI_CACHE_SECONDS`), jadi re
 | `/bandwidth` | Interface dan trafik. |
 | `/dhcp` | Perangkat terhubung. |
 | `/access-points` | Access point dan klien WiFi dari UniFi. |
+| `/bandwidth-policy` | Pembagian bandwidth adil (PCQ), batas per klien, burst, dan insiden klien rakus. |
 | `/security` | Firewall dan temuan. |
 | `/logs` | Aliran log. |
 | `/pengaturan` | Tambah, ubah, hapus, dan pilih sesi MikroTik. |

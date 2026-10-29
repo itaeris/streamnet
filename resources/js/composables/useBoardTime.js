@@ -59,6 +59,7 @@ const liveProps = {
     '/dhcp': [],
     '/dns': ['queries'],
     '/access-points': ['unifi'],
+    '/bandwidth-policy': ['incidents'],
     '/logs': ['logs'],
     '/security': ['events'],
     '/pengaturan': [],

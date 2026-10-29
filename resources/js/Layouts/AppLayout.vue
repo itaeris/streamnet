@@ -51,6 +51,7 @@ const links = [
     { href: '/dhcp', label: 'Connected Devices', icon: 'devices' },
     { href: '/dns', label: 'DNS & Apps', icon: 'language' },
     { href: '/access-points', label: 'Access Points', icon: 'wifi' },
+    { href: '/bandwidth-policy', label: 'Bandwidth Policy', icon: 'gauge' },
     { href: '/security', label: 'Firewall & Security', icon: 'shield' },
     { href: '/logs', label: 'Log Stream', icon: 'receipt_long' },
 ];
@@ -61,6 +62,7 @@ const titles = {
     '/dhcp': 'Devices',
     '/dns': 'DNS & Apps',
     '/access-points': 'Access Points',
+    '/bandwidth-policy': 'Bandwidth Policy',
     '/security': 'Firewall',
     '/logs': 'Log Stream',
     '/pengaturan': 'Pengaturan',

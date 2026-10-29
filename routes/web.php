@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccessPointController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\BandwidthController;
+use App\Http\Controllers\BandwidthPolicyController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DhcpController;
 use App\Http\Controllers\DnsController;
@@ -24,6 +25,8 @@ Route::middleware('auth')->group(function () {
     Route::put('/dhcp/alias', [DhcpController::class, 'updateComment'])->name('dhcp.alias');
     Route::get('/dns', DnsController::class)->name('dns');
     Route::get('/access-points', AccessPointController::class)->name('access-points');
+    Route::get('/bandwidth-policy', [BandwidthPolicyController::class, 'index'])->name('bandwidth-policy');
+    Route::put('/bandwidth-policy', [BandwidthPolicyController::class, 'update'])->name('bandwidth-policy.update');
     Route::get('/logs', LogController::class)->name('logs');
     Route::get('/security', SecurityController::class)->name('security');
     Route::get('/pengaturan', [MikrotikSessionController::class, 'account'])->name('settings');
