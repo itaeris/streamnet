@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../Layouts/AppLayout.vue';
 import { useBoardPulse } from '../composables/usePulse';
@@ -102,6 +102,32 @@ function portLoad(row) {
     return Math.round((((Number(row.rx_bps) || 0) + (Number(row.tx_bps) || 0)) / portPeak.value) * 100);
 }
 
+const pan = ref({ x: 0, y: 0 });
+const dragging = ref(false);
+let grab = { x: 0, y: 0 };
+
+function onPointerDown(event) {
+    if (event.button !== 0 || event.target.closest('a, button')) {
+        return;
+    }
+
+    dragging.value = true;
+    grab = { x: event.clientX - pan.value.x, y: event.clientY - pan.value.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+}
+
+function onPointerMove(event) {
+    if (!dragging.value) {
+        return;
+    }
+
+    pan.value = { x: event.clientX - grab.x, y: event.clientY - grab.y };
+}
+
+function onPointerUp() {
+    dragging.value = false;
+}
+
 </script>
 
 <template>
@@ -117,8 +143,15 @@ function portLoad(row) {
     <div v-else class="noc-card relative flex min-h-full flex-1 flex-col overflow-hidden">
         <div class="topo-grid pointer-events-none absolute inset-0" />
 
-        <div class="relative flex flex-1 flex-col justify-start px-4 py-6 sm:px-8">
-            <div class="map mx-auto flex w-full flex-col items-center">
+        <div
+            class="viewport"
+            :class="dragging ? 'is-dragging' : ''"
+            @pointerdown="onPointerDown"
+            @pointermove="onPointerMove"
+            @pointerup="onPointerUp"
+            @pointercancel="onPointerUp"
+        >
+            <div class="map flex flex-col items-center" :style="{ transform: `translate(${pan.x}px, ${pan.y}px)` }">
                 <article class="topo-node">
                     <span class="topo-icon bg-cyan-2 text-[#003640]">
                         <Icon class="text-[18px]" name="language" />
@@ -196,7 +229,7 @@ function portLoad(row) {
 
                 <template v-if="ports.length">
                     <div class="stem" />
-                    <ul class="branch">
+                    <ul class="branch" :class="{ trunk: switches.length || accessPoints.length || wired.length || unifi?.configured === false }">
                             <li v-for="port in ports" :key="port.name" class="leaf">
                                 <article class="topo-port" :class="port.running ? '' : 'is-down'">
                                     <div class="flex items-center justify-between gap-2">
@@ -236,33 +269,36 @@ function portLoad(row) {
 
                 <template v-if="accessPoints.length">
                     <div class="stem" />
-                    <ul class="branch">
+                    <ul class="branch" :class="{ trunk: wired.length > 0 }">
                             <li v-for="ap in accessPoints" :key="ap.id" class="leaf">
-                                <div class="flex flex-col items-stretch gap-2">
-                                    <article class="topo-port">
-                                        <div class="flex items-center gap-2">
-                                            <span class="topo-icon size-8" :class="ap.state === 'online' ? 'bg-ok/15 text-ok' : 'bg-tile text-mute'">
-                                                <Icon class="text-[16px]" name="wifi" />
-                                            </span>
-                                            <div>
-                                                <p class="text-sm font-semibold whitespace-nowrap">{{ ap.name || ap.model || 'Access point' }}</p>
-                                                <p class="font-mono text-[10px] whitespace-nowrap text-mute">{{ ap.ip || ap.model }}</p>
-                                            </div>
+                                <article class="topo-port">
+                                    <div class="flex items-center gap-2">
+                                        <span class="topo-icon size-8" :class="ap.state === 'online' ? 'bg-ok/15 text-ok' : 'bg-tile text-mute'">
+                                            <Icon class="text-[16px]" name="wifi" />
+                                        </span>
+                                        <div>
+                                            <p class="text-sm font-semibold whitespace-nowrap">{{ ap.name || ap.model || 'Access point' }}</p>
+                                            <p class="font-mono text-[10px] whitespace-nowrap text-mute">{{ ap.ip || ap.model }}</p>
                                         </div>
-                                        <p class="mt-2 text-[11px]" :class="ap.state === 'online' ? 'text-ok' : 'text-mute'">{{ ap.clients }} klien</p>
-                                    </article>
-                                    <p
-                                        v-for="client in (clientsByAp[ap.id] || []).slice(0, shownClients)"
-                                        :key="client.id || client.mac"
-                                        class="truncate rounded-full bg-tile px-2.5 py-1 text-center text-[11px] text-mist"
-                                        :title="clientName(client)"
-                                    >
-                                        {{ clientName(client) }}
-                                    </p>
-                                    <p v-if="(clientsByAp[ap.id] || []).length > shownClients" class="text-center text-[11px] text-mute">
-                                        +{{ (clientsByAp[ap.id] || []).length - shownClients }} klien
-                                    </p>
-                                </div>
+                                    </div>
+                                    <p class="mt-2 text-[11px] whitespace-nowrap" :class="ap.state === 'online' ? 'text-ok' : 'text-mute'">{{ ap.clients }} klien</p>
+                                </article>
+                                <template v-if="(clientsByAp[ap.id] || []).length">
+                                    <div class="stem" />
+                                    <ul class="branch">
+                                        <li v-for="client in (clientsByAp[ap.id] || []).slice(0, shownClients)" :key="client.id || client.mac" class="leaf">
+                                            <article class="topo-chip" :title="clientName(client)">
+                                                <span class="size-1.5 shrink-0 rounded-full bg-ok" />
+                                                <span class="text-xs font-medium whitespace-nowrap">{{ clientName(client) }}</span>
+                                            </article>
+                                        </li>
+                                        <li v-if="(clientsByAp[ap.id] || []).length > shownClients" class="leaf">
+                                            <article class="topo-chip text-xs text-mute">
+                                                +{{ (clientsByAp[ap.id] || []).length - shownClients }}
+                                            </article>
+                                        </li>
+                                    </ul>
+                                </template>
                             </li>
                         </ul>
                 </template>
@@ -315,9 +351,11 @@ function portLoad(row) {
 }
 
 .topo-node {
+    position: relative;
+    z-index: 1;
     display: flex;
     width: max-content;
-    max-width: 100%;
+    max-width: none;
     align-items: center;
     gap: 0.75rem;
     border: 1px solid var(--color-edge);
@@ -350,8 +388,29 @@ function portLoad(row) {
     color: var(--color-mute);
 }
 
+.viewport {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    align-items: flex-start;
+    justify-content: center;
+    overflow: hidden;
+    padding: 1.5rem 1rem 2.5rem;
+    cursor: grab;
+    user-select: none;
+}
+
+.viewport.is-dragging {
+    cursor: grabbing;
+}
+
+.viewport :deep(a) {
+    cursor: pointer;
+}
+
 .map {
     --wire: color-mix(in srgb, var(--color-cyan) 72%, transparent);
+    flex: 0 0 auto;
 }
 
 .stem {
@@ -364,8 +423,10 @@ function portLoad(row) {
 
 .topo-port,
 .topo-chip {
+    position: relative;
+    z-index: 1;
     width: max-content;
-    max-width: 100%;
+    max-width: none;
     border: 1px solid var(--color-edge);
     background: color-mix(in srgb, var(--color-tile) 90%, transparent);
     border-radius: 1rem;
@@ -395,12 +456,25 @@ function portLoad(row) {
 }
 
 .branch {
+    position: relative;
     display: flex;
     width: max-content;
-    max-width: 100%;
+    max-width: none;
     margin: 0;
     padding: 0;
     list-style: none;
+}
+
+.branch.trunk::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: -2px;
+    left: 50%;
+    z-index: 0;
+    width: 2px;
+    background: var(--wire);
+    transform: translateX(-1px);
 }
 
 .leaf {
