@@ -1,15 +1,17 @@
 <script setup>
 import { ref } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../Layouts/AppLayout.vue';
 
 defineOptions({ layout: AppLayout });
 
 defineProps({
+    section: { type: String, default: 'app' },
     sessions: { type: Array, default: () => [] },
     currentSessionId: { type: Number, default: null },
 });
 
+const page = usePage();
 const editing = ref(null);
 const pendingDelete = ref(null);
 
@@ -60,7 +62,20 @@ const editForm = useForm({
     enabled: true,
 });
 
-const fieldClass = 'mt-1 w-full rounded bg-sink px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-cyan-2';
+const passwordForm = useForm({
+    current_password: '',
+    password: '',
+    password_confirmation: '',
+});
+
+const fieldClass = 'mt-1 w-full rounded-full bg-sink px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-cyan-2';
+
+function submitPassword() {
+    passwordForm.put('/pengaturan/password', {
+        preserveScroll: true,
+        onSuccess: () => passwordForm.reset(),
+    });
+}
 
 function submitCreate() {
     createForm.post('/pengaturan/sesi', {
@@ -108,8 +123,14 @@ function endpoint(session) {
 </script>
 
 <template>
-    <Head title="Pengaturan" />
+    <Head :title="section === 'sessions' ? 'Sesi MikroTik' : 'Aplikasi'" />
 
+        <nav class="mb-4 flex flex-wrap gap-1">
+            <Link href="/pengaturan" class="rounded-full px-3 py-1.5 text-sm" :class="section === 'app' ? 'bg-cyan-2 font-semibold text-[#003640]' : 'bg-tile text-mist'">Aplikasi</Link>
+            <Link href="/pengaturan/sesi" class="rounded-full px-3 py-1.5 text-sm" :class="section === 'sessions' ? 'bg-cyan-2 font-semibold text-[#003640]' : 'bg-tile text-mist'">Sesi MikroTik</Link>
+        </nav>
+
+        <template v-if="section === 'sessions'">
         <section class="mb-3">
             <h2 class="text-[15px] font-semibold">Sesi MikroTik</h2>
             <p class="mt-1 max-w-2xl text-sm text-mist">Tambah router lain di sini. API MikroTik memakai port 8728. REST hanya kalau service www memang dibuka, biasanya port 80.</p>
@@ -137,7 +158,7 @@ function endpoint(session) {
                         :href="`/pengaturan/sesi/${session.id}/aktif`"
                         method="post"
                         as="button"
-                        class="shrink-0 rounded bg-cyan-2 px-2.5 py-1.5 text-xs font-semibold text-[#003640]"
+                        class="shrink-0 rounded-full bg-cyan-2 px-2.5 py-1.5 text-xs font-semibold text-[#003640]"
                     >
                         Pantau
                     </Link>
@@ -180,17 +201,17 @@ function endpoint(session) {
                     </label>
                     <p v-if="editForm.hasErrors" class="text-sm text-danger sm:col-span-2">{{ Object.values(editForm.errors)[0] }}</p>
                     <div class="flex gap-2 sm:col-span-2">
-                        <button type="submit" class="rounded bg-cyan-2 px-3 py-2 text-sm font-semibold text-[#003640]" :disabled="editForm.processing">Simpan</button>
-                        <button type="button" class="rounded bg-tile px-3 py-2 text-sm text-mist" @click="editing = null">Batal</button>
+                        <button type="submit" class="rounded-full bg-cyan-2 px-3 py-2 text-sm font-semibold text-[#003640]" :disabled="editForm.processing">Simpan</button>
+                        <button type="button" class="rounded-full bg-tile px-3 py-2 text-sm text-mist" @click="editing = null">Batal</button>
                     </div>
                 </form>
 
                 <div v-else class="mt-3 flex gap-2 border-t border-edge pt-3">
-                    <button type="button" class="rounded bg-tile px-3 py-1.5 text-xs text-mist" @click="startEdit(session)">Ubah</button>
+                    <button type="button" class="rounded-full bg-tile px-3 py-1.5 text-xs text-mist" @click="startEdit(session)">Ubah</button>
                     <button
                         v-if="pendingDelete !== session.id"
                         type="button"
-                        class="rounded bg-tile px-3 py-1.5 text-xs text-danger"
+                        class="rounded-full bg-tile px-3 py-1.5 text-xs text-danger"
                         @click="pendingDelete = session.id"
                     >
                         Hapus
@@ -200,7 +221,7 @@ function endpoint(session) {
                         :href="`/pengaturan/sesi/${session.id}`"
                         method="delete"
                         as="button"
-                        class="rounded bg-danger/15 px-3 py-1.5 text-xs text-danger"
+                        class="rounded-full bg-danger/15 px-3 py-1.5 text-xs text-danger"
                     >
                         Hapus sesi dan sampelnya
                     </Link>
@@ -246,9 +267,34 @@ function endpoint(session) {
                     </label>
                     <p v-if="createForm.hasErrors" class="text-sm text-danger sm:col-span-2">{{ Object.values(createForm.errors)[0] }}</p>
                     <div class="sm:col-span-2">
-                        <button type="submit" class="rounded bg-cyan-2 px-3 py-2 text-sm font-semibold text-[#003640]" :disabled="createForm.processing">Simpan sesi</button>
+                        <button type="submit" class="rounded-full bg-cyan-2 px-3 py-2 text-sm font-semibold text-[#003640]" :disabled="createForm.processing">Simpan sesi</button>
                     </div>
                 </form>
             </article>
+        </section>
+        </template>
+
+        <section v-else class="noc-card max-w-lg p-3">
+            <p class="text-[15px] font-semibold">Password</p>
+            <p class="mt-1 text-sm text-mist">Ganti password masuk untuk {{ page.props.auth?.user?.email || 'akun ini' }}.</p>
+            <form class="mt-3 grid gap-3" @submit.prevent="submitPassword">
+                <label class="block font-mono text-[11px] text-mute">
+                    Password saat ini
+                    <input v-model="passwordForm.current_password" type="password" required autocomplete="current-password" class="text-paper" :class="fieldClass">
+                </label>
+                <label class="block font-mono text-[11px] text-mute">
+                    Password baru
+                    <input v-model="passwordForm.password" type="password" required autocomplete="new-password" class="text-paper" :class="fieldClass">
+                </label>
+                <label class="block font-mono text-[11px] text-mute">
+                    Ulangi password baru
+                    <input v-model="passwordForm.password_confirmation" type="password" required autocomplete="new-password" class="text-paper" :class="fieldClass">
+                </label>
+                <p v-if="passwordForm.hasErrors" class="text-sm text-danger">{{ Object.values(passwordForm.errors)[0] }}</p>
+                <p v-else-if="passwordForm.recentlySuccessful" class="text-sm text-ok">Password diperbarui.</p>
+                <div>
+                    <button type="submit" class="rounded-full bg-cyan-2 px-3 py-2 text-sm font-semibold text-[#003640]" :disabled="passwordForm.processing">Simpan password</button>
+                </div>
+            </form>
         </section>
 </template>

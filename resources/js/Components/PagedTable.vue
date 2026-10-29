@@ -142,29 +142,29 @@ function sortOf(id) {
                     v-model="search"
                     type="search"
                     :placeholder="placeholder"
-                    class="h-8 w-full rounded bg-sink pr-3 pl-8 font-mono text-[11px] text-paper outline-none placeholder:text-mute focus:bg-well"
+                    class="h-8 w-full rounded-full bg-sink pr-3 pl-8 font-mono text-[11px] text-paper outline-none placeholder:text-mute focus:bg-well"
                 >
             </label>
-            <div v-if="columns.length === 0" class="flex gap-1 rounded bg-well p-1">
+            <div v-if="columns.length === 0" class="flex gap-1 rounded-full bg-well p-1">
                 <button
                     v-for="option in sorts"
                     :key="option.id"
                     type="button"
-                    class="rounded px-2 py-1 font-mono text-[11px]"
+                    class="rounded-full px-2.5 py-1 font-mono text-[11px]"
                     :class="sort === option.id ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist'"
-                    :title="option.title || option.label"
+                    v-tip="option.title || ''"
                     @click="sort = option.id"
                 >
                     {{ option.label }}
                 </button>
             </div>
             <div class="ml-auto flex flex-wrap items-center gap-2">
-                <div class="flex gap-1 rounded bg-well p-1">
+                <div class="flex gap-1 rounded-full bg-well p-1">
                     <button
                         v-for="size in sizes"
                         :key="size"
                         type="button"
-                        class="rounded px-2 py-1 font-mono text-[11px]"
+                        class="rounded-full px-2.5 py-1 font-mono text-[11px]"
                         :class="pageSize === size ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist'"
                         @click="pageSize = size"
                     >

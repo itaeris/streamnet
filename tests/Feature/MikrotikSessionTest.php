@@ -31,7 +31,7 @@ class MikrotikSessionTest extends TestCase
                 'wan_interface' => 'ether1',
                 'enabled' => true,
             ])
-            ->assertRedirect('/pengaturan');
+            ->assertRedirect('/pengaturan/sesi');
 
         $session = MikrotikSession::query()->where('host', '10.20.30.1')->first();
         $this->assertNotNull($session);
@@ -39,7 +39,7 @@ class MikrotikSessionTest extends TestCase
         $this->assertNotSame($password, $session->getRawOriginal('password'));
 
         $this->actingAs($user)
-            ->get('/pengaturan')
+            ->get('/pengaturan/sesi')
             ->assertOk()
             ->assertDontSee($password, false);
     }
@@ -65,7 +65,7 @@ class MikrotikSessionTest extends TestCase
                 'password' => '',
                 'enabled' => true,
             ])
-            ->assertRedirect('/pengaturan');
+            ->assertRedirect('/pengaturan/sesi');
 
         $session->refresh();
         $this->assertSame('Pusat HO', $session->name);
@@ -143,7 +143,7 @@ class MikrotikSessionTest extends TestCase
                 'wan_interface' => 'ether1',
                 'enabled' => true,
             ])
-            ->assertRedirect('/pengaturan');
+            ->assertRedirect('/pengaturan/sesi');
 
         $session = MikrotikSession::query()->where('host', '20.20.20.1')->first();
         $this->assertNotNull($session);

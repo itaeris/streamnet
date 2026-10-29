@@ -23,7 +23,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/dns', DnsController::class)->name('dns');
     Route::get('/logs', LogController::class)->name('logs');
     Route::get('/security', SecurityController::class)->name('security');
-    Route::get('/pengaturan', [MikrotikSessionController::class, 'index'])->name('settings');
+    Route::get('/pengaturan', [MikrotikSessionController::class, 'account'])->name('settings');
+    Route::get('/pengaturan/sesi', [MikrotikSessionController::class, 'index'])->name('settings.sessions');
+    Route::put('/pengaturan/password', [LoginController::class, 'updatePassword'])->name('settings.password');
     Route::post('/pengaturan/sesi', [MikrotikSessionController::class, 'store'])->name('settings.sessions.store');
     Route::put('/pengaturan/sesi/{mikrotikSession}', [MikrotikSessionController::class, 'update'])->name('settings.sessions.update');
     Route::delete('/pengaturan/sesi/{mikrotikSession}', [MikrotikSessionController::class, 'destroy'])->name('settings.sessions.destroy');

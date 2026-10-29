@@ -24,7 +24,7 @@ const submit = () => {
         <button
             type="button"
             class="absolute top-4 right-4 flex size-9 items-center justify-center rounded-full bg-well text-mist hover:text-paper"
-            :title="theme === 'light' ? 'Mode gelap' : 'Mode terang'"
+            v-tip="theme === 'light' ? 'Mode gelap' : 'Mode terang'"
             @click="toggleTheme"
         >
             <span class="material-symbols-outlined text-[18px]">{{ theme === 'light' ? 'dark_mode' : 'light_mode' }}</span>

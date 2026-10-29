@@ -13,7 +13,7 @@ export const ranges = [
     { minutes: 2880, label: 'Last 2 days' },
 ];
 
-export const boardPaths = ['/', '/bandwidth', '/dhcp', '/dns', '/logs', '/security', '/pengaturan'];
+export const boardPaths = ['/', '/bandwidth', '/dhcp', '/dns', '/logs', '/security', '/pengaturan', '/pengaturan/sesi'];
 
 export const refreshes = [
     { id: 'off', label: 'Off', seconds: 0 },

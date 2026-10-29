@@ -190,7 +190,7 @@ onBeforeUnmount(() => {
         <div v-if="panel" class="flex h-full w-96 max-w-[85vw] flex-col">
             <header class="relative flex h-12 shrink-0 items-center justify-center px-12">
                 <h2 class="truncate text-sm font-medium">{{ panel.title }}</h2>
-                <button type="button" class="absolute right-3 rounded-md p-1 text-mute hover:text-paper" title="Tutup" @click="close">
+                <button type="button" class="absolute right-3 rounded-md p-1 text-mute hover:text-paper" v-tip="'Tutup'" @click="close">
                     <span class="material-symbols-outlined text-[18px]">close</span>
                 </button>
             </header>
@@ -202,7 +202,7 @@ onBeforeUnmount(() => {
                     type="button"
                     class="flex size-10 items-center justify-center rounded-lg"
                     :class="active?.id === tab.id ? 'bg-active text-paper' : 'text-mute hover:text-mist'"
-                    :title="tab.label"
+                    v-tip="tab.label"
                     @click="tabId = tab.id"
                 >
                     <span class="material-symbols-outlined text-[20px]">{{ tab.icon }}</span>
@@ -234,7 +234,7 @@ onBeforeUnmount(() => {
                     <p class="text-[11px] text-mute">Alias</p>
                     <div v-if="panel.alias.value && !editingAlias" class="group mt-1 flex items-center justify-between gap-2">
                         <p class="min-w-0 truncate text-sm font-medium">{{ panel.alias.value }}</p>
-                        <button type="button" class="shrink-0 rounded p-0.5 text-mute opacity-0 transition-opacity group-hover:opacity-100 hover:text-paper" title="Edit" @click="startAliasEdit">
+                        <button type="button" class="shrink-0 rounded p-0.5 text-mute opacity-0 transition-opacity group-hover:opacity-100 hover:text-paper" v-tip="'Edit'" @click="startAliasEdit">
                             <span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20">edit</span>
                         </button>
                     </div>

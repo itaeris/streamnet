@@ -62,6 +62,7 @@ const titles = {
     '/security': 'Firewall',
     '/logs': 'Log Stream',
     '/pengaturan': 'Pengaturan',
+    '/pengaturan/sesi': 'Pengaturan',
 };
 
 const { pulse, connected } = usePulse(() => page.props.pulse ?? null);
@@ -174,7 +175,7 @@ const dotClass = computed(() => {
         <header class="z-30 shrink-0">
             <div class="flex items-center justify-between gap-3 px-1">
                 <div class="flex min-w-0 items-center gap-3">
-                    <button type="button" class="hidden size-9 items-center justify-center rounded-lg text-mute hover:bg-tile hover:text-paper lg:flex" :title="collapsed ? 'Buka sidebar' : 'Tutup sidebar'" @click="toggleSidebar">
+                    <button type="button" class="hidden size-9 items-center justify-center rounded-lg text-mute hover:bg-tile hover:text-paper lg:flex" v-tip:right="collapsed ? 'Buka sidebar' : 'Tutup sidebar'" @click="toggleSidebar">
                         <span class="material-symbols-outlined text-[20px]">{{ collapsed ? 'left_panel_open' : 'left_panel_close' }}</span>
                     </button>
                     <div class="flex items-center gap-2">
@@ -197,16 +198,16 @@ const dotClass = computed(() => {
                     <button
                         type="button"
                         class="flex size-9 items-center justify-center rounded-full bg-well text-mist hover:text-paper"
-                        :title="theme === 'light' ? 'Mode gelap' : 'Mode terang'"
+                        v-tip="theme === 'light' ? 'Mode gelap' : 'Mode terang'"
                         @click="toggleTheme"
                     >
                         <span class="material-symbols-outlined text-[18px]">{{ theme === 'light' ? 'dark_mode' : 'light_mode' }}</span>
                     </button>
                     <span class="hidden font-mono text-[11px] text-mist xl:inline">{{ pulse?.sampled_label || '–' }}</span>
-                    <Link :href="hrefFor('/pengaturan')" class="p-1 text-mute lg:hidden" title="Pengaturan">
+                    <Link :href="hrefFor('/pengaturan')" class="p-1 text-mute lg:hidden" v-tip="'Pengaturan'">
                         <span class="material-symbols-outlined text-[18px]">settings</span>
                     </Link>
-                    <Link href="/logout" method="post" as="button" class="p-1 text-mute lg:hidden" title="Keluar">
+                    <Link href="/logout" method="post" as="button" class="p-1 text-mute lg:hidden" v-tip="'Keluar'">
                         <span class="material-symbols-outlined text-[18px]">logout</span>
                     </Link>
                 </div>
@@ -229,7 +230,7 @@ const dotClass = computed(() => {
             <div class="px-3 pt-3">
                 <div ref="routerRoot" class="relative rounded-lg bg-well p-3" :class="collapsed ? 'flex justify-center p-2' : ''">
                     <template v-if="collapsed">
-                        <button type="button" class="text-cyan" :title="currentSession?.name || 'Ganti router'" @click="routerOpen = !routerOpen">
+                        <button type="button" class="text-cyan" v-tip:right="currentSession?.name || 'Ganti router'" @click="routerOpen = !routerOpen">
                             <span class="material-symbols-outlined text-[22px]">router</span>
                         </button>
                         <MenuPanel :open="routerOpen" class="absolute top-0 left-full z-50 ml-2 w-56 origin-top-left rounded-lg bg-menu p-2 shadow-md ring-1 ring-edge">
@@ -252,7 +253,7 @@ const dotClass = computed(() => {
                     <template v-else>
                     <div class="flex items-center justify-between gap-2">
                         <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Active router</p>
-                        <button type="button" class="text-mute" title="Ganti router" @click="routerOpen = !routerOpen">
+                        <button type="button" class="text-mute" v-tip="'Ganti router'" @click="routerOpen = !routerOpen">
                             <span class="material-symbols-outlined text-[18px] transition-transform duration-200" :class="routerOpen ? 'rotate-180' : ''">expand_more</span>
                         </button>
                     </div>
@@ -292,7 +293,7 @@ const dotClass = computed(() => {
                         :href="hrefFor(link.href)"
                         class="flex items-center gap-3 rounded-lg py-2.5 text-sm transition"
                         :class="[collapsed ? 'justify-center px-0' : 'px-3', current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper']"
-                        :title="link.label"
+                        v-tip:right="collapsed ? link.label : ''"
                     >
                         <span class="material-symbols-outlined text-[20px]">{{ link.icon }}</span>
                         <span v-if="!collapsed">{{ link.label }}</span>
@@ -306,7 +307,7 @@ const dotClass = computed(() => {
                     <span class="rounded bg-tile px-1.5 py-0.5 font-mono text-[11px] text-cyan">{{ pulse?.system?.version || '–' }}</span>
                 </div>
                 <div ref="profileRoot" class="relative rounded-3xl bg-tile" :class="collapsed ? '' : 'overflow-hidden'">
-                    <button type="button" class="flex w-full items-center gap-2 text-left" :class="collapsed ? 'justify-center px-1 py-2' : 'px-2.5 py-2'" :title="page.props.auth.user?.name" @click="profileOpen = !profileOpen">
+                    <button type="button" class="flex w-full items-center gap-2 text-left" :class="collapsed ? 'justify-center px-1 py-2' : 'px-2.5 py-2'" v-tip:right="collapsed ? page.props.auth.user?.name : ''" @click="profileOpen = !profileOpen">
                         <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-cyan-2 text-[11px] font-semibold text-[#003640]">
                             {{ initials }}
                         </div>
@@ -323,7 +324,7 @@ const dotClass = computed(() => {
                             <Link
                                 :href="hrefFor('/pengaturan')"
                                 class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-hover"
-                                :class="current === '/pengaturan' ? 'font-semibold text-paper' : ''"
+                                :class="current.startsWith('/pengaturan') ? 'font-semibold text-paper' : ''"
                             >
                                 <span class="material-symbols-outlined text-[18px]">settings</span>
                                 Pengaturan

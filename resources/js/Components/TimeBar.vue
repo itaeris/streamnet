@@ -104,18 +104,18 @@ onBeforeUnmount(() => {
     <div ref="root" class="flex items-center gap-1">
         <div class="relative" :class="live ? 'opacity-40' : ''">
         <div class="flex items-center rounded-full bg-well p-0.5">
-            <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" title="Mundur satu rentang" :disabled="live" @click="shiftWindow(-1)">
+            <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" v-tip="'Mundur satu rentang'" :disabled="live" @click="shiftWindow(-1)">
                 <span class="material-symbols-outlined text-[16px]">chevron_left</span>
             </button>
-            <button type="button" class="flex max-w-44 items-center gap-1 rounded-full px-2 py-1 text-mist hover:bg-hover hover:text-paper disabled:hover:bg-transparent" :aria-expanded="rangeOpen" :disabled="live" :title="live ? 'Live mengabaikan rentang waktu' : 'Rentang waktu'" @click="toggleRange">
+            <button type="button" class="flex max-w-44 items-center gap-1 rounded-full px-2 py-1 text-mist hover:bg-hover hover:text-paper disabled:hover:bg-transparent" :aria-expanded="rangeOpen" :disabled="live" v-tip="live ? 'Live mengabaikan rentang waktu' : 'Rentang waktu'" @click="toggleRange">
                 <span class="material-symbols-outlined text-[15px]">schedule</span>
                 <span class="truncate font-mono text-[11px]">{{ rangeLabel }}</span>
                 <span class="material-symbols-outlined text-[16px] transition-transform duration-200" :class="rangeOpen ? 'rotate-180' : ''">expand_more</span>
             </button>
-            <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" title="Maju satu rentang" :disabled="live || !pinned" @click="shiftWindow(1)">
+            <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" v-tip="'Maju satu rentang'" :disabled="live || !pinned" @click="shiftWindow(1)">
                 <span class="material-symbols-outlined text-[16px]">chevron_right</span>
             </button>
-            <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" title="Perlebar rentang" :disabled="live || !canZoomOut" @click="zoomOut">
+            <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" v-tip="'Perlebar rentang'" :disabled="live || !canZoomOut" @click="zoomOut">
                 <span class="material-symbols-outlined text-[16px]">zoom_out</span>
             </button>
         </div>
@@ -147,7 +147,7 @@ onBeforeUnmount(() => {
             role="switch"
             :aria-checked="live"
             class="flex h-9 items-center gap-1.5 rounded-full bg-well p-0.5 pl-2"
-            title="Live mengabaikan interval"
+            v-tip="'Live mengabaikan interval'"
             @click="toggleLive"
         >
             <span class="font-mono text-[11px] leading-none" :class="live ? 'text-ok' : 'text-mute'">Live</span>
@@ -158,7 +158,7 @@ onBeforeUnmount(() => {
 
         <div class="relative" :class="live ? 'opacity-40' : ''">
         <div class="flex items-center rounded-full bg-well p-0.5">
-            <button type="button" class="inline-flex items-center rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:hover:bg-transparent" title="Refresh" :disabled="live" @click="refreshNow">
+            <button type="button" class="inline-flex items-center rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:hover:bg-transparent" v-tip="'Refresh'" :disabled="live" @click="refreshNow">
                 <span class="material-symbols-outlined text-[16px]">refresh</span>
             </button>
             <button type="button" class="flex items-center gap-0.5 rounded-full px-1.5 py-1 font-mono text-[11px] text-mist hover:bg-hover hover:text-paper disabled:hover:bg-transparent" :aria-expanded="refreshOpen" :disabled="live" @click="toggleRefresh">

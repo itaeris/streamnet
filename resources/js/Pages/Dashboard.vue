@@ -356,8 +356,8 @@ const visibleIfaces = (live, query) => {
                         <p class="font-mono text-[11px] text-mute">{{ live?.wan?.name || 'WAN' }}</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 font-mono text-[11px]">
-                        <span class="inline-flex items-center gap-1.5 rounded bg-tile px-2 py-1"><span class="h-1 w-2.5 rounded bg-cyan" /> RX {{ formatRate(peakOf('rx')) }}</span>
-                        <span class="inline-flex items-center gap-1.5 rounded bg-tile px-2 py-1"><span class="h-1 w-2.5 rounded bg-ok" /> TX {{ formatRate(peakOf('tx')) }}</span>
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-tile px-2.5 py-1"><span class="h-1 w-2.5 rounded-full bg-cyan" /> RX {{ formatRate(peakOf('rx')) }}</span>
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-tile px-2.5 py-1"><span class="h-1 w-2.5 rounded-full bg-ok" /> TX {{ formatRate(peakOf('tx')) }}</span>
                         <span class="text-cyan">{{ live?.sampled_label || '' }} {{ pinned && !boardLive ? 'RANGE' : boardLive ? 'LIVE' : refreshId === 'off' ? 'PAUSED' : refreshId.toUpperCase() }}</span>
                     </div>
                 </div>
@@ -368,8 +368,8 @@ const visibleIfaces = (live, query) => {
                     <div class="flex flex-wrap items-end justify-between gap-2">
                         <p class="font-mono text-[11px] text-mute">{{ bridgeName }}</p>
                         <div class="flex flex-wrap items-center gap-2 font-mono text-[11px]">
-                            <span class="inline-flex items-center gap-1.5 rounded bg-tile px-2 py-1"><span class="h-1 w-2.5 rounded bg-cyan" /> RX {{ formatRate(bridgePeak('rx')) }}</span>
-                            <span class="inline-flex items-center gap-1.5 rounded bg-tile px-2 py-1"><span class="h-1 w-2.5 rounded bg-ok" /> TX {{ formatRate(bridgePeak('tx')) }}</span>
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-tile px-2.5 py-1"><span class="h-1 w-2.5 rounded-full bg-cyan" /> RX {{ formatRate(bridgePeak('rx')) }}</span>
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-tile px-2.5 py-1"><span class="h-1 w-2.5 rounded-full bg-ok" /> TX {{ formatRate(bridgePeak('tx')) }}</span>
                         </div>
                     </div>
                     <div class="mt-2 rounded bg-sink p-2">

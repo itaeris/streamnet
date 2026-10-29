@@ -19,6 +19,16 @@ use Inertia\Response;
 
 class MikrotikSessionController extends Controller
 {
+    public function account(CurrentMikrotikSession $current, AnalyticsQuery $analytics): Response
+    {
+        $active = $current->resolve();
+
+        return Inertia::render('Settings', [
+            'section' => 'app',
+            'pulse' => $active ? $analytics->pulse($active->id) : null,
+        ]);
+    }
+
     public function index(CurrentMikrotikSession $current, AnalyticsQuery $analytics): Response
     {
         $active = $current->resolve();
@@ -30,6 +40,7 @@ class MikrotikSessionController extends Controller
             ->keyBy('mikrotik_session_id');
 
         return Inertia::render('Settings', [
+            'section' => 'sessions',
             'pulse' => $active ? $analytics->pulse($active->id) : null,
             'currentSessionId' => $active?->id,
             'sessions' => $sessions->map(function (MikrotikSession $session) use ($pulses) {
@@ -57,14 +68,14 @@ class MikrotikSessionController extends Controller
     {
         MikrotikSession::query()->create($this->validated($request, true));
 
-        return redirect()->route('settings');
+        return redirect()->route('settings.sessions');
     }
 
     public function update(Request $request, MikrotikSession $mikrotikSession): RedirectResponse
     {
         $mikrotikSession->update($this->validated($request, false));
 
-        return redirect()->route('settings');
+        return redirect()->route('settings.sessions');
     }
 
     public function destroy(Request $request, MikrotikSession $mikrotikSession): RedirectResponse
@@ -83,7 +94,7 @@ class MikrotikSessionController extends Controller
             $request->session()->forget('mikrotik_session_id');
         }
 
-        return redirect()->route('settings');
+        return redirect()->route('settings.sessions');
     }
 
     public function activate(Request $request, MikrotikSession $mikrotikSession): RedirectResponse

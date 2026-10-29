@@ -69,7 +69,7 @@ export function usePulse(getInitial) {
             const current = page.props.currentSessionId;
             const foreign = current && data.session_id && Number(data.session_id) !== Number(current);
             if (foreign) {
-                if (live.value && page.url.split('?')[0] === '/pengaturan') {
+                if (live.value && page.url.split('?')[0].startsWith('/pengaturan')) {
                     syncLivePage();
                 }
                 return;

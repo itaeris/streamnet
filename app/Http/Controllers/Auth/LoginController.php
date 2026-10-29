@@ -43,4 +43,23 @@ class LoginController extends Controller
 
         return redirect()->route('login');
     }
+
+    public function updatePassword(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'current_password' => ['required', 'current_password'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ], [
+            'current_password.current_password' => 'Password saat ini tidak cocok.',
+            'password.confirmed' => 'Ulangan password tidak sama.',
+            'password.min' => 'Password baru minimal 8 karakter.',
+        ]);
+
+        $request->user()->update([
+            'password' => $data['password'],
+        ]);
+        $request->session()->regenerate();
+
+        return back();
+    }
 }
