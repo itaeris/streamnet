@@ -139,7 +139,6 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           envs: BACKEND_ENV_B64,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,IMAGE
-          script_stop: true
           script: |
             set -euo pipefail
             mkdir -p /opt/streamnet
@@ -147,6 +146,30 @@ jobs:
             printf '%s' "$BACKEND_ENV_B64" | base64 -d > /opt/streamnet/.env
             chmod 600 /opt/streamnet/.env
             docker network inspect streamnet-network >/dev/null 2>&1 || docker network create streamnet-network
+            attach() {
+              alias="$1"
+              required="$2"
+              if docker container inspect "$alias" >/dev/null 2>&1; then
+                name="$alias"
+              else
+                name="$(docker ps -a --format '{{.Names}} {{.Image}}' | awk -v needle="$alias" 'BEGIN { IGNORECASE = 1 } $2 ~ needle && $2 !~ /phpmyadmin|adminer/ { print $1; exit }')"
+              fi
+              if [ -z "$name" ]; then
+                if [ "$required" = "yes" ]; then
+                  echo "Container ${alias} tidak ditemukan." >&2
+                  docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' >&2 || true
+                  exit 1
+                fi
+                return 0
+              fi
+              if [ "$name" = "$alias" ]; then
+                docker network connect streamnet-network "$name" 2>/dev/null || true
+              else
+                docker network connect --alias "$alias" streamnet-network "$name" 2>/dev/null || true
+              fi
+            }
+            attach mysql yes
+            attach redis no
             printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin >/dev/null
             docker pull "$IMAGE"
             if docker ps -a --format '{{.Names}}' | grep -qx streamnet_app; then
@@ -161,9 +184,17 @@ jobs:
               -p 2700:2700 \
               "$IMAGE"
             ok=0
+            restarts=0
             for _ in $(seq 1 24); do
-              if docker exec streamnet_app curl -fsS http://127.0.0.1:2700/up >/dev/null; then
+              if docker exec streamnet_app curl -fsS http://127.0.0.1:2700/up >/dev/null 2>&1; then
                 ok=1
+                break
+              fi
+              state="$(docker inspect -f '{{.State.Status}}' streamnet_app 2>/dev/null || echo missing)"
+              if [ "$state" = "restarting" ]; then
+                restarts=$((restarts + 1))
+              fi
+              if [ "$restarts" -ge 3 ]; then
                 break
               fi
               sleep 5
