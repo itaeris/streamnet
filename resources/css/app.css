@@ -83,6 +83,29 @@
     user-select: none;
 }
 
+.skeleton {
+    border-radius: 0.5rem;
+    background: linear-gradient(90deg, var(--color-tile) 25%, color-mix(in srgb, var(--color-paper) 12%, var(--color-tile)) 37%, var(--color-tile) 63%);
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+}
+
+@keyframes skeleton-shimmer {
+    0% {
+        background-position: 100% 0;
+    }
+
+    100% {
+        background-position: 0 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton {
+        animation: none;
+    }
+}
+
 .noc-card {
     border: 1px solid var(--color-edge);
     background: var(--color-panel);

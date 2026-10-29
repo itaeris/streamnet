@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import MenuPanel from '../Components/MenuPanel.vue';
+import PageSkeleton from '../Components/PageSkeleton.vue';
 import PreviewDrawer from '../Components/PreviewDrawer.vue';
 import TimeBar from '../Components/TimeBar.vue';
 import { boardPaths, boardQuery, live, pinned, rangeMinutes, refreshId, refreshSeconds, syncBoardFromUrl, useBoardTime } from '../composables/useBoardTime';
@@ -88,7 +89,48 @@ const { pulse, connected } = usePulse(() => page.props.pulse ?? null);
 provide(pulseKey, pulse);
 const { close: closePreview } = usePreview();
 const { apply } = useBoardTime();
+const navigating = ref(false);
+const skeletonKind = ref('table');
 let refreshTimer = 0;
+let navigationToken = 0;
+
+function skeletonFor(path) {
+    if (path === '/') {
+        return 'overview';
+    }
+
+    if (path === '/bandwidth') {
+        return 'chart';
+    }
+
+    if (path.startsWith('/pengaturan')) {
+        return 'settings';
+    }
+
+    return 'table';
+}
+
+function navigationTarget(visit) {
+    if (!visit || visit.showProgress === false) {
+        return '';
+    }
+
+    if (Array.isArray(visit.only) && visit.only.length > 0) {
+        return '';
+    }
+
+    if (String(visit.method || 'get').toLowerCase() !== 'get') {
+        return '';
+    }
+
+    const next = new URL(visit.url, window.location.origin).pathname;
+
+    if (next === window.location.pathname && visit.preserveState) {
+        return '';
+    }
+
+    return next;
+}
 
 function hrefFor(path) {
     if (!boardPaths.includes(path)) {
@@ -151,13 +193,39 @@ if (windowMissing(page.url)) {
     apply();
 }
 
+function beginNavigation(event) {
+    const path = navigationTarget(event.detail?.visit);
+
+    if (!path) {
+        return;
+    }
+
+    const token = ++navigationToken;
+    skeletonKind.value = skeletonFor(path);
+    window.setTimeout(() => {
+        if (token === navigationToken) {
+            navigating.value = true;
+        }
+    }, 0);
+}
+
+function endNavigation() {
+    navigationToken += 1;
+    navigating.value = false;
+}
+
 onMounted(() => {
     document.addEventListener('pointerdown', closeMenus);
     armRefresh();
 });
+const stopNavigationStart = router.on('start', beginNavigation);
+const stopNavigationFinish = router.on('finish', endNavigation);
 onBeforeUnmount(() => {
     document.removeEventListener('pointerdown', closeMenus);
     window.clearInterval(refreshTimer);
+    stopNavigationStart();
+    stopNavigationFinish();
+    endNavigation();
 });
 
 const liveLabel = computed(() => {
@@ -365,7 +433,8 @@ const dotClass = computed(() => {
                 <div v-else-if="!pulse" class="noc-card mb-3 border-warn/40 px-3 py-2 text-sm text-warn">
                     Belum ada sampel. Pemantau MikroTik belum mengirim data.
                 </div>
-                <slot />
+                <PageSkeleton v-if="navigating" :kind="skeletonKind" />
+                <slot v-else />
             </main>
             <footer class="flex shrink-0 items-center justify-between gap-3 border-t border-edge px-4 py-2.5 font-mono text-[11px] text-mist">
                 <span class="font-sans text-xs font-semibold text-paper">StreamNet</span>
