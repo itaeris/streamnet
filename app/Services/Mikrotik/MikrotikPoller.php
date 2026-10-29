@@ -718,6 +718,7 @@ class MikrotikPoller
                 $record,
             );
             $payload[] = [
+                'router_id' => $routerId,
                 'address' => $record['address'],
                 'mac' => $record['mac_address'],
                 'host' => $record['host_name'],

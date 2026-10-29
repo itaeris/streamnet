@@ -3,10 +3,14 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import LiveRate from './LiveRate.vue';
 import TrafficChart from './TrafficChart.vue';
 import { live } from '../composables/useBoardTime';
+import { useLeaseAlias } from '../composables/useLeaseAlias';
 import { usePreview } from '../composables/usePreview';
 import { pushPoint } from '../lib/time';
 
 const { preview, close } = usePreview();
+const { saving, error, saveLeaseAlias } = useLeaseAlias();
+const draft = ref('');
+const editingAlias = ref(false);
 const panel = ref(null);
 const root = ref(null);
 const tabId = ref('');
@@ -21,6 +25,8 @@ watch(preview, (value) => {
 
     if (panel.value?.key !== value.key) {
         tabId.value = value.tabs?.[0]?.id ?? '';
+        draft.value = value.alias?.value || '';
+        editingAlias.value = false;
     }
 
     panel.value = value;
@@ -81,9 +87,38 @@ function onTransitionEnd(event) {
 }
 
 function onKey(event) {
-    if (event.key === 'Escape') {
-        close();
+    if (event.key !== 'Escape') {
+        return;
     }
+
+    const tag = event.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') {
+        if (editingAlias.value && panel.value?.alias?.value) {
+            draft.value = panel.value.alias.value;
+            editingAlias.value = false;
+        }
+
+        return;
+    }
+
+    close();
+}
+
+function submitAlias(comment) {
+    const id = panel.value?.alias?.routerId;
+    if (!id) {
+        return;
+    }
+
+    saveLeaseAlias(id, comment, (stored) => {
+        draft.value = stored;
+        editingAlias.value = false;
+    });
+}
+
+function startAliasEdit() {
+    draft.value = panel.value?.alias?.value || '';
+    editingAlias.value = true;
 }
 
 function onPointerDown(event) {
@@ -193,6 +228,31 @@ onBeforeUnmount(() => {
                             {{ panel.status.label }}
                         </span>
                     </div>
+                </section>
+
+                <section v-if="panel.alias && active?.id === 'overview'" class="rounded-xl border border-edge bg-menu px-3 py-3">
+                    <p class="text-[11px] text-mute">Alias</p>
+                    <div v-if="panel.alias.value && !editingAlias" class="group mt-1 flex items-center justify-between gap-2">
+                        <p class="min-w-0 truncate text-sm font-medium">{{ panel.alias.value }}</p>
+                        <button type="button" class="shrink-0 rounded p-0.5 text-mute opacity-0 transition-opacity group-hover:opacity-100 hover:text-paper" title="Edit" @click="startAliasEdit">
+                            <span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20">edit</span>
+                        </button>
+                    </div>
+                    <form v-else class="mt-2 flex items-center gap-1.5" @submit.prevent="submitAlias(draft)">
+                        <label class="sr-only" for="lease-alias">Alias</label>
+                        <input
+                            id="lease-alias"
+                            v-model="draft"
+                            data-alias-input
+                            type="text"
+                            maxlength="128"
+                            placeholder="Alias"
+                            class="h-8 min-w-0 flex-1 rounded-lg bg-sink px-2.5 text-sm outline-none"
+                        >
+                        <button type="submit" class="h-8 shrink-0 rounded-lg bg-cyan-2 px-2.5 text-[12px] font-semibold text-[#003640]" :disabled="saving">Simpan</button>
+                        <button v-if="panel.alias.value" type="button" class="h-8 shrink-0 px-1 text-[12px] text-mute hover:text-danger" :disabled="saving" @click="submitAlias('')">Hapus</button>
+                    </form>
+                    <p v-if="error" class="mt-1.5 text-[11px] text-danger">{{ error }}</p>
                 </section>
 
                 <section v-if="active.metrics?.length" class="grid gap-2 rounded-xl border border-edge bg-menu px-3 py-3" :class="active.metrics.length > 2 ? 'grid-cols-3' : 'grid-cols-2'">

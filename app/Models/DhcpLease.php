@@ -35,6 +35,7 @@ class DhcpLease extends Model
     public function toPayload(): array
     {
         return [
+            'router_id' => $this->router_id,
             'address' => $this->address,
             'mac' => $this->mac_address,
             'host' => $this->host_name,

@@ -9,6 +9,7 @@ import PreviewBinder from '../Components/PreviewBinder.vue';
 import { live as boardLive, ranges } from '../composables/useBoardTime';
 import { useBoardPulse } from '../composables/usePulse';
 import { usePreview } from '../composables/usePreview';
+import { aliasOf } from '../composables/useLeaseAlias';
 import { durationSeconds } from '../lib/format';
 import { inWindow } from '../lib/time';
 
@@ -61,7 +62,8 @@ function leasePreview(lease, sampledAt = null) {
     return {
         key: `lease:${lease.address}:${lease.mac}`,
         icon: 'devices',
-        title: host || lease.address || 'Lease',
+        title: aliasOf(lease) || host || lease.address || 'Lease',
+        alias: lease.router_id ? { routerId: lease.router_id, value: aliasOf(lease) } : null,
         subtitle: lease.mac || '',
         detail: host ? (lease.address || '') : '',
         status: { label: statusLabel, tone },
@@ -90,7 +92,6 @@ function leasePreview(lease, sampledAt = null) {
                         { label: 'Server', value: show(lease.server) },
                         { label: 'Dynamic', value: lease.dynamic ? 'yes' : 'no' },
                         { label: 'Blocked', value: blocked ? 'yes' : 'no', tone: blocked ? 'danger' : 'ok' },
-                        { label: 'Comment', value: show(lease.comment), mono: false },
                     ],
                 }],
             },
@@ -152,7 +153,7 @@ function dnsSections(address) {
 
 function activeLease(live) {
     const key = preview.value?.key;
-    const lease = windowed(live).find((row) => leasePreview(row).key === key);
+    const lease = windowed(live).map((row) => identified(row)).find((row) => `lease:${row.address}:${row.mac}` === key);
 
     return lease ? leasePreview(lease, live?.sampled_at) : null;
 }
@@ -178,7 +179,7 @@ const rows = (live, search) => {
     const source = windowed(live);
     const needle = String(search || '').trim().toLowerCase();
 
-    return source.filter((lease) => {
+        return source.filter((lease) => {
         const statusOk = status.value === 'all'
             || (status.value === 'blocked' ? lease.blocked : lease.status === status.value);
         if (!statusOk) {
@@ -187,12 +188,22 @@ const rows = (live, search) => {
         if (!needle) {
             return true;
         }
-        return [lease.address, lease.mac, lease.host, lease.server, lease.comment]
+        return [lease.address, lease.mac, lease.host, lease.server, aliasOf(lease)]
             .join(' ')
             .toLowerCase()
             .includes(needle);
-    });
+    }).map((lease) => identified(lease));
 };
+
+function identified(lease) {
+    if (lease.router_id) {
+        return lease;
+    }
+
+    const known = props.leases.find((row) => row.address === lease.address && row.mac === lease.mac);
+
+    return known?.router_id ? { ...lease, router_id: known.router_id } : lease;
+}
 
 const summary = (live) => {
     const list = windowed(live);
@@ -224,6 +235,7 @@ const columnLabels = {
     address: 'Address',
     mac: 'MAC',
     host: 'Host',
+    alias: 'Alias',
     download: 'Download',
     upload: 'Upload',
     server: 'Server',
@@ -236,6 +248,7 @@ const sortColumns = [
     { id: 'address', type: 'text', first: 'asc', get: (lease) => lease.address || '' },
     { id: 'mac', type: 'text', first: 'asc', get: (lease) => lease.mac || '' },
     { id: 'host', type: 'text', first: 'asc', get: (lease) => lease.host || '' },
+    { id: 'alias', type: 'text', first: 'asc', get: (lease) => aliasOf(lease) },
     { id: 'download', type: 'number', first: 'desc', get: (lease) => Number(lease.rx_bps) || 0 },
     { id: 'upload', type: 'number', first: 'desc', get: (lease) => Number(lease.tx_bps) || 0 },
     { id: 'server', type: 'text', first: 'asc', get: (lease) => lease.server || '' },
@@ -313,6 +326,7 @@ const sortColumns = [
                         <td class="px-3 py-2 font-mono text-cyan">{{ lease.address }}</td>
                         <td class="px-3 py-2 font-mono text-mist">{{ lease.mac || '–' }}</td>
                         <td class="px-3 py-2">{{ lease.host || '–' }}</td>
+                        <td class="px-3 py-2">{{ aliasOf(lease) || '–' }}</td>
                         <td class="px-3 py-2 font-mono text-cyan"><LiveRate :value="lease.rx_bps" /></td>
                         <td class="px-3 py-2 font-mono text-ok"><LiveRate :value="lease.tx_bps" /></td>
                         <td class="px-3 py-2 font-mono text-mist">{{ lease.server || '–' }}</td>
@@ -320,7 +334,7 @@ const sortColumns = [
                         <td class="px-3 py-2 font-mono text-mist">{{ lease.expires_after || '–' }}</td>
                     </tr>
                     <tr v-if="pageRows.length === 0">
-                        <td colspan="9" class="px-3 py-8 text-center font-mono text-[11px] text-mute">{{ boardLive ? 'Tidak ada lease.' : 'Tidak ada lease pada rentang ini.' }}</td>
+                        <td colspan="10" class="px-3 py-8 text-center font-mono text-[11px] text-mute">{{ boardLive ? 'Tidak ada lease.' : 'Tidak ada lease pada rentang ini.' }}</td>
                     </tr>
                 </tbody>
             </table>
