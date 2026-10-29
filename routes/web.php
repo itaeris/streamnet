@@ -10,6 +10,7 @@ use App\Http\Controllers\DnsController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\MikrotikSessionController;
 use App\Http\Controllers\SecurityController;
+use App\Http\Controllers\TopologyController;
 use App\Http\Controllers\UnifiSettingsController;
 use App\Http\Controllers\UserController;
 use App\Services\Mikrotik\CurrentMikrotikSession;
@@ -36,6 +37,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/dhcp/alias', [DhcpController::class, 'updateComment'])->name('dhcp.alias');
     Route::get('/dns', DnsController::class);
     Route::get('/access-points', AccessPointController::class);
+    Route::get('/topology', TopologyController::class);
     Route::get('/bandwidth-policy', [BandwidthPolicyController::class, 'index']);
     Route::put('/bandwidth-policy', [BandwidthPolicyController::class, 'update'])->name('bandwidth-policy.update');
     Route::get('/bandwidth-policy/context', [BandwidthPolicyController::class, 'context'])->name('bandwidth-policy.context');
@@ -69,6 +71,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/dhcp', DhcpController::class)->name('dhcp');
         Route::get('/dns', DnsController::class)->name('dns');
         Route::get('/access-points', AccessPointController::class)->name('access-points');
+        Route::get('/topology', TopologyController::class)->name('topology');
         Route::get('/bandwidth-policy', [BandwidthPolicyController::class, 'index'])->name('bandwidth-policy');
         Route::get('/logs', LogController::class)->name('logs');
         Route::get('/security', SecurityController::class)->name('security');

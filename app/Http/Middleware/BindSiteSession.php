@@ -56,6 +56,7 @@ class BindSiteSession
             'security',
             'access-points',
             'bandwidth-policy',
+            'topology',
         );
     }
 }

@@ -65,6 +65,7 @@ const links = [
     { href: '/dhcp', label: 'Connected Devices', icon: 'devices' },
     { href: '/dns', label: 'DNS & Apps', icon: 'language' },
     { href: '/access-points', label: 'Access Points', icon: 'wifi' },
+    { href: '/topology', label: 'Topology Map', icon: 'lan' },
     { href: '/bandwidth-policy', label: 'Bandwidth Policy', icon: 'gauge' },
     { href: '/security', label: 'Firewall & Security', icon: 'shield' },
     { href: '/logs', label: 'Log Stream', icon: 'receipt_long' },
@@ -76,6 +77,7 @@ const titles = {
     '/dhcp': 'Devices',
     '/dns': 'DNS & Apps',
     '/access-points': 'Access Points',
+    '/topology': 'Topology',
     '/bandwidth-policy': 'Bandwidth Policy',
     '/security': 'Firewall',
     '/logs': 'Log Stream',
@@ -102,6 +104,10 @@ function skeletonFor(path) {
 
     if (path === '/bandwidth') {
         return 'chart';
+    }
+
+    if (path === '/topology') {
+        return 'overview';
     }
 
     if (path.startsWith('/pengaturan')) {
@@ -426,15 +432,17 @@ const dotClass = computed(() => {
         </aside>
 
             <div class="flex min-w-0 flex-1 flex-col">
-            <main ref="main" class="min-h-0 flex-1 overflow-y-auto p-3">
+            <main ref="main" class="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
                 <div v-if="pulse && pulse.online === false" class="noc-card mb-3 border-danger/40 px-3 py-2 text-sm text-danger">
                     Router tidak terjangkau. {{ pulse.error }}
                 </div>
                 <div v-else-if="!pulse" class="noc-card mb-3 border-warn/40 px-3 py-2 text-sm text-warn">
                     Belum ada sampel. Pemantau MikroTik belum mengirim data.
                 </div>
-                <PageSkeleton v-if="navigating" :kind="skeletonKind" />
-                <slot v-else />
+                <div class="flex min-h-0 flex-1 flex-col">
+                    <PageSkeleton v-if="navigating" :kind="skeletonKind" />
+                    <slot v-else />
+                </div>
             </main>
             <footer class="flex shrink-0 items-center justify-between gap-3 border-t border-edge px-4 py-2.5 font-mono text-[11px] text-mist">
                 <span class="font-sans text-xs font-semibold text-paper">StreamNet</span>

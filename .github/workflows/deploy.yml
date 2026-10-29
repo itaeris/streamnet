@@ -11,6 +11,7 @@ concurrency:
 
 jobs:
   test:
+    name: Testing
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +41,7 @@ jobs:
         run: php artisan test
 
   build:
+    name: Build to Container
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -110,6 +112,7 @@ jobs:
           cache-to: type=gha,scope=streamnet-app,mode=max
 
   deploy:
+    name: Deploy to Server
     needs: build
     runs-on: ubuntu-latest
     steps:
