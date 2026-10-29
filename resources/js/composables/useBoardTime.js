@@ -15,6 +15,35 @@ export const ranges = [
 
 export const boardPaths = ['/', '/bandwidth', '/dhcp', '/dns', '/logs', '/security', '/pengaturan', '/pengaturan/sesi', '/pengaturan/unifi', '/pengaturan/pengguna'];
 
+export function barePath(url, slug = '') {
+    const path = String(url || '').split('?')[0] || '/';
+    if (slug && (path === `/${slug}` || path.startsWith(`/${slug}/`))) {
+        return path.slice(slug.length + 1) || '/';
+    }
+
+    return path;
+}
+
+export function withSite(path, slug = '') {
+    if (!slug || path.startsWith('/pengaturan') || path.startsWith('/sesi')) {
+        return path;
+    }
+
+    return path === '/' ? `/${slug}` : `/${slug}${path}`;
+}
+
+function slugFromPath(url) {
+    const path = String(url || '').split('?')[0] || '/';
+    const parts = path.split('/').filter(Boolean);
+    if (!parts.length || parts[0] === 'sesi' || parts[0] === 'login' || boardPaths.includes(path)) {
+        return '';
+    }
+
+    const rest = parts.length === 1 ? '/' : `/${parts.slice(1).join('/')}`;
+
+    return rest === '/' || boardPaths.includes(rest) ? parts[0] : '';
+}
+
 export const refreshes = [
     { id: 'off', label: 'Off', seconds: 0 },
     { id: 'auto', label: 'Auto', seconds: null },
@@ -69,7 +98,9 @@ const liveProps = {
 };
 
 function livePropsFor(url) {
-    return liveProps[String(url || '').split('?')[0]];
+    const slug = slugFromPath(url);
+
+    return liveProps[barePath(url, slug)];
 }
 
 function rememberLive(on) {
@@ -220,9 +251,10 @@ export function useBoardTime() {
     const page = usePage();
 
     function timedPath() {
-        const path = page.url.split('?')[0];
+        const slug = page.props.currentSessionSlug || slugFromPath(page.url);
+        const path = barePath(page.url, slug);
 
-        return boardPaths.includes(path) ? path : null;
+        return boardPaths.includes(path) ? withSite(path, slug) : null;
     }
 
     function apply() {

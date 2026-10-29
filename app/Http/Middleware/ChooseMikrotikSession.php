@@ -22,6 +22,11 @@ class ChooseMikrotikSession
             return $next($request);
         }
 
+        $segment = (string) $request->segment(1);
+        if ($segment !== '' && MikrotikSession::query()->where('slug', $segment)->exists()) {
+            return $next($request);
+        }
+
         if (! MikrotikSession::query()->exists()) {
             return $next($request);
         }

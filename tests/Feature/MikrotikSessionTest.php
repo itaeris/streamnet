@@ -31,7 +31,7 @@ class MikrotikSessionTest extends TestCase
                 'wan_interface' => 'ether1',
                 'enabled' => true,
             ])
-            ->assertRedirect('/sesi/Cabang');
+            ->assertRedirect('/sesi/cabang');
 
         $session = MikrotikSession::query()->where('host', '10.20.30.1')->first();
         $this->assertNotNull($session);
@@ -39,7 +39,7 @@ class MikrotikSessionTest extends TestCase
         $this->assertNotSame($password, $session->getRawOriginal('password'));
 
         $this->actingAs($user)
-            ->get('/sesi/Cabang')
+            ->get('/sesi/cabang')
             ->assertOk()
             ->assertDontSee($password, false);
     }
@@ -65,7 +65,7 @@ class MikrotikSessionTest extends TestCase
                 'password' => '',
                 'enabled' => true,
             ])
-            ->assertRedirect('/sesi/'.rawurlencode('Pusat HO'));
+            ->assertRedirect('/sesi/pusat-ho');
 
         $session->refresh();
         $this->assertSame('Pusat HO', $session->name);
@@ -98,11 +98,12 @@ class MikrotikSessionTest extends TestCase
                 ->where('sessions.0.unifi', false));
 
         $this->actingAs($user)
-            ->get('/sesi/'.rawurlencode('AERIS | FTI'))
+            ->get('/sesi/aeris-fti')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('SessionSettings', false)
                 ->where('session.name', 'AERIS | FTI')
+                ->where('session.slug', 'aeris-fti')
                 ->where('unifi.has_key', false));
     }
 
@@ -128,12 +129,12 @@ class MikrotikSessionTest extends TestCase
 
         $this->actingAs($user)
             ->post('/pengaturan/sesi/'.$second->id.'/aktif')
-            ->assertRedirect('/')
+            ->assertRedirect('/dua')
             ->assertSessionHas('mikrotik_session_id', $second->id);
 
         $this->actingAs($user)
             ->withSession(['mikrotik_session_id' => $second->id])
-            ->get('/')
+            ->get('/dua')
             ->assertOk()
             ->assertInertia(fn ($page) => $page->where('currentSessionId', $second->id));
 
@@ -176,7 +177,7 @@ class MikrotikSessionTest extends TestCase
                 'wan_interface' => 'ether1',
                 'enabled' => true,
             ])
-            ->assertRedirect('/sesi/Rumah');
+            ->assertRedirect('/sesi/rumah');
 
         $session = MikrotikSession::query()->where('host', '20.20.20.1')->first();
         $this->assertNotNull($session);

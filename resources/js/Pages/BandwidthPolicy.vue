@@ -46,6 +46,9 @@ const form = useForm({
     target: '',
 });
 const confirming = ref(false);
+const ispDown = ref(null);
+const ispUp = ref(null);
+const tolerance = ref(10);
 const tabOptions = computed(() => [
     { id: 'manage', label: 'Manage' },
     { id: 'incidents', label: filteredIncidents.value.length ? `Insiden (${filteredIncidents.value.length})` : 'Insiden' },
@@ -56,25 +59,66 @@ const tab = ref(['manage', 'incidents', 'settings'].includes(storedTab) ? stored
 watch(tab, (value) => localStorage.setItem('bandwidthPolicy.tab', value));
 let seeded = false;
 
+function guessTarget() {
+    const leases = live.value?.leases ?? props.pulse?.leases ?? [];
+    const counts = {};
+    for (const lease of leases) {
+        const parts = String(lease.address || '').split('.');
+        if (parts.length !== 4 || parts.some((part) => part === '' || Number.isNaN(Number(part)))) {
+            continue;
+        }
+        const net = `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+        counts[net] = (counts[net] || 0) + 1;
+    }
+    const best = Object.entries(counts).sort((left, right) => right[1] - left[1])[0];
+
+    return best?.[0] || '10.10.10.0/24';
+}
+
 function seed() {
     if (!shaping.value) {
         return;
     }
 
     form.defaults({
-        capacity_down: mbps(main.value?.max_down) || 100,
-        capacity_up: mbps(main.value?.max_up) || 50,
+        capacity_down: main.value ? mbps(main.value.max_down) : 0,
+        capacity_up: main.value ? mbps(main.value.max_up) : 0,
         client_down: mbps(downType.value?.rate),
         client_up: mbps(upType.value?.rate),
         burst: (Number(downType.value?.burst_rate) || 0) > 0,
         burst_down: mbps(downType.value?.burst_rate),
         burst_up: mbps(upType.value?.burst_rate),
         burst_time: seconds(downType.value?.burst_time),
-        target: main.value?.target || '10.10.10.0/24',
+        target: main.value?.target || guessTarget(),
     });
     form.reset();
+    if (main.value && form.capacity_down > 0) {
+        ispDown.value = Math.round((Number(form.capacity_down) + Number(tolerance.value)) * 10) / 10;
+    }
+    if (main.value && form.capacity_up > 0) {
+        ispUp.value = Math.round((Number(form.capacity_up) + Number(tolerance.value)) * 10) / 10;
+    }
     seeded = true;
 }
+
+function queueMbps(isp) {
+    const speed = Number(isp);
+    const keep = Number(tolerance.value);
+    if (!Number.isFinite(speed) || speed <= 0 || !Number.isFinite(keep) || keep < 0 || keep >= speed) {
+        return 0;
+    }
+
+    return Math.round((speed - keep) * 10) / 10;
+}
+
+const queueDown = computed(() => queueMbps(ispDown.value));
+const queueUp = computed(() => queueMbps(ispUp.value));
+const formulaReady = computed(() => queueDown.value > 0 && queueUp.value > 0);
+
+watch([queueDown, queueUp], ([down, up]) => {
+    form.capacity_down = down;
+    form.capacity_up = up;
+});
 
 watch(shaping, () => {
     if (!seeded || !form.isDirty) {
@@ -127,9 +171,13 @@ const checks = computed(() => {
     const items = [];
     const peak = Number(props.wanPeak?.rx) || 0;
 
-    items.push(main.value
-        ? { tone: 'ok', title: `Queue PCQ "${main.value.name}" aktif`, text: `Membagi ${main.value.target} secara adil antar klien. Sekarang ${main.value.users_down} klien aktif.` }
-        : { tone: 'danger', title: 'Belum ada queue PCQ', text: 'Tanpa PCQ, klien rebutan bandwidth dan yang paling rakus menang. Isi form di bawah untuk membuatnya.' });
+    if (!shaping.value) {
+        items.push({ tone: 'warn', title: 'Menunggu data queue', text: 'Poller belum mengirim daftar queue. Pengaturan baru bisa dibuat setelah data itu masuk.' });
+    } else if (main.value) {
+        items.push({ tone: 'ok', title: `Queue PCQ "${main.value.name}" aktif`, text: `Membagi ${main.value.target} secara adil antar klien. Sekarang ${main.value.users_down} klien aktif.` });
+    } else {
+        items.push({ tone: 'danger', title: 'Belum ada queue PCQ', text: 'Tanpa PCQ, klien rebutan bandwidth dan yang paling rakus menang. Isi pengaturan di atas, lalu buat queue-nya.' });
+    }
 
     items.push(shaping.value?.fasttrack
         ? { tone: 'danger', title: 'FastTrack aktif', text: 'Koneksi yang di-fasttrack melewati simple queue, jadi batas tidak berlaku. Nonaktifkan rule fasttrack-connection di IP › Firewall › Filter.' }
@@ -484,7 +532,7 @@ const incidentColumns = [
 ];
 
 const steps = [
-    { icon: 'gauge', title: '1. Kapasitas total', text: 'Set ±90% dari kecepatan ISP. Antrean jadi terjadi di router, bukan di ISP, sehingga router yang mengatur siapa dapat berapa.' },
+    { icon: 'gauge', title: '1. Kapasitas total', text: 'Kapasitas queue = kecepatan ISP − toleransi MikroTik. Contoh paket 300 Mbps dengan toleransi 10 Mbps menjadi 290 Mbps, supaya antrean terjadi di router.' },
     { icon: 'fair_share', title: '2. PCQ bagi rata', text: 'Kapasitas dibagi sama rata ke klien yang sedang aktif. Klien yang diam tidak memakan jatah. Sisa jatahnya otomatis dipakai klien lain.' },
     { icon: 'burst', title: '3. Batas per klien', text: 'Plafon per klien. Klien yang menyentuh batas berhenti di situ, dan sisa bandwidth diteruskan ke klien yang masih kekurangan.' },
 ];
@@ -604,43 +652,11 @@ const steps = [
     </template>
 
     <template v-else>
-        <section class="mt-3 grid gap-3 xl:grid-cols-[1.1fr_1fr]">
-            <article class="noc-card p-4">
-                <p class="text-[15px] font-semibold">Cara kerjanya</p>
-                <p class="mt-1 text-sm text-mist">Saat bandwidth habis, bukan klien yang paling rakus yang menang. Router membagi rata, memberi plafon, lalu meneruskan sisa ke yang kekurangan.</p>
-                <ul class="mt-4 grid gap-3">
-                    <li v-for="step in steps" :key="step.title" class="flex gap-3">
-                        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-tile text-cyan">
-                            <Icon class="text-[18px]" :name="step.icon" />
-                        </span>
-                        <span>
-                            <span class="block text-sm font-medium">{{ step.title }}</span>
-                            <span class="block text-[12px] text-mist">{{ step.text }}</span>
-                        </span>
-                    </li>
-                </ul>
-            </article>
-
-            <article class="noc-card p-4">
-                <p class="text-[15px] font-semibold">Pemeriksaan router</p>
-                <ul class="mt-3 grid gap-3">
-                    <li v-for="check in checks" :key="check.title" class="flex gap-2.5">
-                        <Icon class="mt-0.5 text-[18px]" :class="toneText(check.tone)" :name="toneIcon(check.tone)" />
-                        <span>
-                            <span class="block text-sm font-medium">{{ check.title }}</span>
-                            <span class="block text-[12px] text-mist">{{ check.text }}</span>
-                        </span>
-                    </li>
-                    <li v-if="!shaping" class="text-sm text-mute">Menunggu data queue dari poller…</li>
-                </ul>
-            </article>
-        </section>
-
         <section class="noc-card mt-3 p-4">
             <div class="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                    <p class="text-[15px] font-semibold">Atur kebijakan</p>
-                    <p class="mt-1 text-sm text-mist">Angka dalam Mbps. Batas per klien 0 berarti bagi rata tanpa plafon.</p>
+                    <p class="text-[15px] font-semibold">{{ main ? 'Atur kebijakan' : 'Buat queue PCQ' }}</p>
+                    <p class="mt-1 text-sm text-mist">{{ main ? 'Kapasitas queue = kecepatan ISP − toleransi MikroTik. Batas per klien 0 berarti bagi rata tanpa plafon.' : 'Queue ini belum ada di router. Isi kecepatan ISP dan toleransi, lalu buat queue PCQ-nya.' }}</p>
                 </div>
                 <span v-if="main" class="rounded-full bg-tile px-2.5 py-1 font-mono text-[11px] text-mist">{{ main.name }} · {{ main.target }}</span>
             </div>
@@ -648,13 +664,26 @@ const steps = [
             <form class="mt-4 grid gap-4 lg:grid-cols-2" @submit.prevent="confirming = true">
                 <div class="grid gap-3 sm:grid-cols-2">
                     <label class="block text-[12px] font-medium text-mist">
-                        Kapasitas download
-                        <input v-model.number="form.capacity_down" type="number" min="1" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
+                        Kecepatan ISP download
+                        <input v-model.number="ispDown" type="number" min="1" step="1" placeholder="300" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
                     </label>
                     <label class="block text-[12px] font-medium text-mist">
-                        Kapasitas upload
-                        <input v-model.number="form.capacity_up" type="number" min="1" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
+                        Kecepatan ISP upload
+                        <input v-model.number="ispUp" type="number" min="1" step="1" placeholder="300" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
                     </label>
+                    <label class="block text-[12px] font-medium text-mist sm:col-span-2">
+                        Toleransi MikroTik
+                        <input v-model.number="tolerance" type="number" min="0" step="1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
+                    </label>
+                    <div class="rounded-xl bg-sink px-4 py-3 sm:col-span-2">
+                        <p class="text-[12px] font-medium text-mist">Kapasitas queue</p>
+                        <p v-if="formulaReady" class="mt-1 text-sm font-semibold">
+                            Download {{ queueDown }} Mbps · Upload {{ queueUp }} Mbps
+                        </p>
+                        <p v-else class="mt-1 text-sm text-warn">Isi kecepatan ISP yang lebih besar dari toleransi.</p>
+                        <p v-if="formulaReady" class="mt-1 font-mono text-[11px] text-mute">{{ ispDown }} − {{ tolerance }} = {{ queueDown }} Mbps download · {{ ispUp }} − {{ tolerance }} = {{ queueUp }} Mbps upload</p>
+                        <p v-if="wanPeak?.rx" class="mt-1 text-[11px] text-mute">Puncak pemakaian WAN 24 jam {{ formatRate(wanPeak.rx) }} download<span v-if="wanPeak.tx"> · {{ formatRate(wanPeak.tx) }} upload</span>. Itu pemakaian, bukan kecepatan paket ISP.</p>
+                    </div>
                     <label class="block text-[12px] font-medium text-mist">
                         Batas per klien download
                         <input v-model.number="form.client_down" type="number" min="0" step="0.1" class="mt-1.5 h-10 w-full rounded-full bg-sink px-4 text-sm text-paper outline-none focus:ring-2 focus:ring-cyan-2/40">
@@ -689,20 +718,51 @@ const steps = [
                     <p class="text-[12px] font-medium text-mist">Perintah RouterOS yang akan dijalankan</p>
                     <pre class="mt-1.5 flex-1 overflow-x-auto rounded-xl bg-sink p-3 font-mono text-[11px] leading-5 whitespace-pre text-paper">{{ script }}</pre>
                     <p v-if="form.hasErrors" class="mt-2 text-sm text-danger">{{ Object.values(form.errors)[0] }}</p>
-                    <p v-else-if="form.recentlySuccessful" class="mt-2 text-sm text-ok">Diterapkan. Data queue diperbarui di poll berikutnya.</p>
+                    <p v-else-if="form.recentlySuccessful" class="mt-2 text-sm text-ok">{{ main ? 'Diterapkan. Data queue diperbarui di poll berikutnya.' : 'Queue dibuat. Daftar queue diperbarui di poll berikutnya.' }}</p>
                     <div class="mt-3 flex flex-wrap items-center gap-2">
                         <template v-if="!confirming">
-                            <button type="submit" class="h-10 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640] disabled:opacity-60" :disabled="form.processing || !shaping">Terapkan ke router</button>
+                            <button type="submit" class="h-10 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640] disabled:opacity-60" :disabled="form.processing || !shaping || !formulaReady">{{ main ? 'Terapkan ke router' : 'Buat queue PCQ' }}</button>
                             <button v-if="form.isDirty" type="button" class="h-10 rounded-full bg-tile px-4 text-sm text-mist" @click="form.reset()">Kembalikan</button>
                         </template>
                         <template v-else>
-                            <span class="text-sm text-warn">Ubah queue di router sekarang?</span>
-                            <button type="button" class="h-10 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640] disabled:opacity-60" :disabled="form.processing" @click="apply">{{ form.processing ? 'Menerapkan…' : 'Ya, terapkan' }}</button>
+                            <span class="text-sm text-warn">{{ main ? 'Ubah queue di router sekarang?' : 'Buat queue PCQ di router sekarang?' }}</span>
+                            <button type="button" class="h-10 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640] disabled:opacity-60" :disabled="form.processing" @click="apply">{{ form.processing ? 'Menerapkan…' : (main ? 'Ya, terapkan' : 'Ya, buat') }}</button>
                             <button type="button" class="h-10 rounded-full bg-tile px-4 text-sm text-mist" @click="confirming = false">Batal</button>
                         </template>
                     </div>
                 </div>
             </form>
+        </section>
+
+        <section class="mt-3 grid gap-3 xl:grid-cols-[1.1fr_1fr]">
+            <article class="noc-card p-4">
+                <p class="text-[15px] font-semibold">Cara kerjanya</p>
+                <p class="mt-1 text-sm text-mist">Saat bandwidth habis, bukan klien yang paling rakus yang menang. Router membagi rata, memberi plafon, lalu meneruskan sisa ke yang kekurangan.</p>
+                <ul class="mt-4 grid gap-3">
+                    <li v-for="step in steps" :key="step.title" class="flex gap-3">
+                        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-tile text-cyan">
+                            <Icon class="text-[18px]" :name="step.icon" />
+                        </span>
+                        <span>
+                            <span class="block text-sm font-medium">{{ step.title }}</span>
+                            <span class="block text-[12px] text-mist">{{ step.text }}</span>
+                        </span>
+                    </li>
+                </ul>
+            </article>
+
+            <article class="noc-card p-4">
+                <p class="text-[15px] font-semibold">Pemeriksaan router</p>
+                <ul class="mt-3 grid gap-3">
+                    <li v-for="check in checks" :key="check.title" class="flex gap-2.5">
+                        <Icon class="mt-0.5 text-[18px]" :class="toneText(check.tone)" :name="toneIcon(check.tone)" />
+                        <span>
+                            <span class="block text-sm font-medium">{{ check.title }}</span>
+                            <span class="block text-[12px] text-mist">{{ check.text }}</span>
+                        </span>
+                    </li>
+                </ul>
+            </article>
         </section>
     </template>
 </template>

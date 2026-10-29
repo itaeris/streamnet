@@ -5,7 +5,7 @@ import MenuPanel from '../Components/MenuPanel.vue';
 import PageSkeleton from '../Components/PageSkeleton.vue';
 import PreviewDrawer from '../Components/PreviewDrawer.vue';
 import TimeBar from '../Components/TimeBar.vue';
-import { boardPaths, boardQuery, live, pinned, rangeMinutes, refreshId, refreshSeconds, syncBoardFromUrl, useBoardTime } from '../composables/useBoardTime';
+import { barePath, boardPaths, boardQuery, live, pinned, rangeMinutes, refreshId, refreshSeconds, syncBoardFromUrl, useBoardTime, withSite } from '../composables/useBoardTime';
 import { usePreview } from '../composables/usePreview';
 import { pulseKey, usePulse } from '../composables/usePulse';
 import { useTheme } from '../composables/useTheme';
@@ -13,7 +13,7 @@ import { formatUptime } from '../lib/format';
 
 const page = usePage();
 const { theme, toggleTheme } = useTheme();
-const current = computed(() => page.url.split('?')[0]);
+const current = computed(() => barePath(page.url, page.props.currentSessionSlug || ''));
 const main = ref(null);
 const collapsed = ref(typeof window !== 'undefined' && localStorage.getItem('sidebar') === 'collapsed');
 const profileOpen = ref(false);
@@ -92,10 +92,10 @@ const { apply } = useBoardTime();
 const navigating = ref(false);
 const skeletonKind = ref('table');
 let refreshTimer = 0;
-let navigationToken = 0;
-let skeletonTimer = 0;
 
 function skeletonFor(path) {
+    path = barePath(path, page.props.currentSessionSlug || '');
+
     if (path === '/') {
         return 'overview';
     }
@@ -125,8 +125,9 @@ function navigationTarget(visit) {
     }
 
     const next = new URL(visit.url, window.location.origin).pathname;
+    const here = window.location.pathname;
 
-    if (next === window.location.pathname && visit.preserveState) {
+    if (next === here && visit.preserveState) {
         return '';
     }
 
@@ -134,17 +135,18 @@ function navigationTarget(visit) {
 }
 
 function hrefFor(path) {
+    const href = withSite(path, page.props.currentSessionSlug || '');
     if (!boardPaths.includes(path)) {
-        return path;
+        return href;
     }
 
     const query = new URLSearchParams(boardQuery());
 
-    return `${path}?${query}`;
+    return `${href}?${query}`;
 }
 
 function windowMissing(url) {
-    const path = String(url).split('?')[0];
+    const path = barePath(url, page.props.currentSessionSlug || '');
     if (!boardPaths.includes(path)) {
         return false;
     }
@@ -201,19 +203,11 @@ function beginNavigation(event) {
         return;
     }
 
-    const token = ++navigationToken;
     skeletonKind.value = skeletonFor(path);
-    window.clearTimeout(skeletonTimer);
-    skeletonTimer = window.setTimeout(() => {
-        if (token === navigationToken) {
-            navigating.value = true;
-        }
-    }, 180);
+    navigating.value = true;
 }
 
 function endNavigation() {
-    navigationToken += 1;
-    window.clearTimeout(skeletonTimer);
     navigating.value = false;
 }
 
@@ -310,8 +304,6 @@ const dotClass = computed(() => {
                     v-for="link in links"
                     :key="link.href"
                     :href="hrefFor(link.href)"
-                    :prefetch="['hover', 'click']"
-                    cache-for="10s"
                     class="shrink-0 rounded-md px-2.5 py-1.5 text-xs"
                     :class="current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'bg-tile text-mist'"
                 >
@@ -386,8 +378,6 @@ const dotClass = computed(() => {
                         v-for="link in links"
                         :key="link.href"
                         :href="hrefFor(link.href)"
-                        :prefetch="['hover', 'click']"
-                        cache-for="10s"
                         class="flex items-center gap-3 rounded-lg py-2.5 text-sm transition"
                         :class="[collapsed ? 'justify-center px-0' : 'px-3', current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper']"
                         v-tip:right="collapsed ? link.label : ''"

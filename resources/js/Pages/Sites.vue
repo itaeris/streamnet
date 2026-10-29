@@ -78,7 +78,7 @@ const { theme, toggleTheme } = useTheme();
                         <p class="text-xs" :class="session.unifi ? 'text-ok' : 'text-mute'">
                             {{ session.unifi ? 'UniFi terhubung' : 'UniFi belum dihubungkan' }}
                         </p>
-                        <Link :href="`/sesi/${encodeURIComponent(session.name)}`" class="inline-flex items-center gap-1 text-xs font-semibold text-cyan">
+                        <Link :href="`/sesi/${encodeURIComponent(session.slug || session.name)}`" class="inline-flex items-center gap-1 text-xs font-semibold text-cyan">
                             <Icon class="text-[14px]" name="settings" />
                             Pengaturan
                         </Link>

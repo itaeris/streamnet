@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectUsersTo('/');
         $middleware->web(append: [
             \App\Http\Middleware\ChooseMikrotikSession::class,
+            \App\Http\Middleware\BindSiteSession::class,
             \App\Http\Middleware\PreferLiveWindow::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
         ]);

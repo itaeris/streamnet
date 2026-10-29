@@ -13,7 +13,7 @@ class PreferLiveWindow
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->isMethod('GET') || ! $request->is('/', 'bandwidth', 'dhcp', 'dns', 'logs', 'security', 'pengaturan', 'pengaturan/sesi', 'pengaturan/unifi', 'pengaturan/pengguna')) {
+        if (! $request->isMethod('GET') || ! $this->tracksLive($request)) {
             return $next($request);
         }
 
@@ -22,5 +22,34 @@ class PreferLiveWindow
         }
 
         return redirect($request->fullUrlWithQuery(['live' => 1]));
+    }
+
+    private function tracksLive(Request $request): bool
+    {
+        $known = [
+            '/',
+            'bandwidth',
+            'dhcp',
+            'dns',
+            'logs',
+            'security',
+            'pengaturan',
+            'pengaturan/sesi',
+            'pengaturan/unifi',
+            'pengaturan/pengguna',
+        ];
+        $path = $request->path();
+        if (in_array($path, $known, true)) {
+            return true;
+        }
+
+        $site = $request->route('site');
+        if (! is_string($site) || $site === '' || ! str_starts_with($path, $site)) {
+            return false;
+        }
+
+        $rest = trim(substr($path, strlen($site)), '/');
+
+        return $rest === '' || in_array($rest, ['bandwidth', 'dhcp', 'dns', 'logs', 'security'], true);
     }
 }

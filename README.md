@@ -76,7 +76,7 @@ Variabel `MIKROTIK_*` hanya membuat **sesi pertama**, dan hanya kalau belum ada 
 | `MIKROTIK_CONNECTION_WARNING` | Ambang conntrack peringatan. |
 | `MIKROTIK_CONNECTION_CRITICAL` | Ambang conntrack kritis. |
 
-Daftar sesi ada di `/sesi`. Pengaturan satu router (host, protokol, API UniFi) ada di `/sesi/{nama sesi}`, misalnya `/sesi/AERIS%20%7C%20FTI`. Sesi baru ditambah di `/sesi/baru`. Protokol **API** memakai port 8728 (API-SSL 8729). Itu protokol biner MikroTik, bukan HTTP. REST HTTP/HTTPS hanya dipakai kalau service `www` memang terbuka, biasanya port 80, dan alamatnya berakhiran `/rest`. Port 8728 yang tersimpan sebagai HTTP tetap dibaca sebagai API.
+Daftar sesi ada di `/sesi`. Konsol sesi yang dibuka memakai slug namanya, misalnya `AERIS | FTI` menjadi `/aeris-fti` dan `/aeris-fti/bandwidth`. Pengaturan router itu ada di `/sesi/aeris-fti`. Sesi baru ditambah di `/sesi/baru`. Protokol **API** memakai port 8728 (API-SSL 8729). Itu protokol biner MikroTik, bukan HTTP. REST HTTP/HTTPS hanya dipakai kalau service `www` memang terbuka, biasanya port 80, dan alamatnya berakhiran `/rest`. Port 8728 yang tersimpan sebagai HTTP tetap dibaca sebagai API.
 
 Password tidak dikirim balik ke halaman. Saat mengubah sesi, kosongkan password kalau tidak ingin menggantinya.
 

@@ -52,7 +52,7 @@ class UnifiSettingsController extends Controller
         $connection ? $connection->update($data) : UnifiConnection::query()->create($data);
         $unifi->forget();
 
-        return redirect()->route('sites.show', ['session' => $session->name]);
+        return redirect()->route('sites.show', ['session' => $session->slug]);
     }
 
     public function destroy(CurrentMikrotikSession $current, UnifiClient $unifi): RedirectResponse
@@ -76,7 +76,7 @@ class UnifiSettingsController extends Controller
         UnifiConnection::query()->where('mikrotik_session_id', $session->id)->delete();
         $unifi->forget();
 
-        return redirect()->route('sites.show', ['session' => $session->name]);
+        return redirect()->route('sites.show', ['session' => $session->slug]);
     }
 
     /**
@@ -84,7 +84,8 @@ class UnifiSettingsController extends Controller
      */
     private function named(string $session): MikrotikSession
     {
-        return MikrotikSession::query()->where('name', $session)->firstOrFail();
+        return MikrotikSession::query()->where('slug', $session)->first()
+            ?? MikrotikSession::query()->where('name', $session)->firstOrFail();
     }
 
     /**

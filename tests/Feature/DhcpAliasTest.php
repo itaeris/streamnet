@@ -78,7 +78,7 @@ class DhcpAliasTest extends TestCase
             ->assertJsonPath('queries.0.domain', 'youtube.com');
 
         $this->actingAs(User::factory()->create())
-            ->get('/dhcp?live=1')
+            ->get('/aeris/dhcp?live=1')
             ->assertOk()
             ->assertInertia(fn ($page) => $page->missing('dns'));
     }

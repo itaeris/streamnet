@@ -24,7 +24,7 @@ const page = usePage();
 const sessionSettingsHref = computed(() => {
     const current = (page.props.sessions ?? []).find((item) => item.id === page.props.currentSessionId);
 
-    return current?.name ? `/sesi/${encodeURIComponent(current.name)}` : '/sesi';
+    return current?.slug || current?.name ? `/sesi/${encodeURIComponent(current.slug || current.name)}` : '/sesi';
 });
 const devices = computed(() => (props.unifi?.devices ?? []).filter((device) => device.access_point));
 const clients = computed(() => props.unifi?.clients ?? []);

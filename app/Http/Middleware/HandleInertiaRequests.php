@@ -29,10 +29,11 @@ class HandleInertiaRequests extends Middleware
             $sessions = MikrotikSession::query()
                 ->orderBy('name')
                 ->orderBy('id')
-                ->get(['id', 'name', 'host', 'enabled'])
+                ->get(['id', 'name', 'slug', 'host', 'enabled'])
                 ->map(fn (MikrotikSession $session) => [
                     'id' => $session->id,
                     'name' => $session->name,
+                    'slug' => $session->slug,
                     'host' => $session->host,
                     'enabled' => $session->enabled,
                 ])
@@ -49,6 +50,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'sessions' => $sessions,
             'currentSessionId' => $current?->id,
+            'currentSessionSlug' => $current?->slug,
         ];
     }
 }

@@ -142,7 +142,7 @@ class TimeWindowTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->get('/logs?minutes=5')
+            ->get('/utama/logs?minutes=5')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('minutes', 5)
@@ -150,7 +150,7 @@ class TimeWindowTest extends TestCase
                 ->where('logs.0.message', 'inside-window'));
 
         $this->actingAs($user)
-            ->get('/security?minutes=5')
+            ->get('/utama/security?minutes=5')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('minutes', 5)
@@ -158,7 +158,7 @@ class TimeWindowTest extends TestCase
                 ->where('events.0.title', 'inside-event'));
 
         $this->actingAs($user)
-            ->get('/dhcp?minutes=5')
+            ->get('/utama/dhcp?minutes=5')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('minutes', 5)
@@ -166,7 +166,7 @@ class TimeWindowTest extends TestCase
                 ->where('leases.0.address', '10.0.0.8'));
 
         $this->actingAs($user)
-            ->get('/?minutes=5')
+            ->get('/utama?minutes=5')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->has('logs', 1)
@@ -175,21 +175,21 @@ class TimeWindowTest extends TestCase
                 ->where('events.0.title', 'inside-event'));
 
         $this->actingAs($user)
-            ->get('/logs?live=1')
+            ->get('/utama/logs?live=1')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('live', true)
                 ->has('logs', 2));
 
         $this->actingAs($user)
-            ->get('/security?live=1')
+            ->get('/utama/security?live=1')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('live', true)
                 ->has('events', 2));
 
         $this->actingAs($user)
-            ->get('/dhcp?live=1')
+            ->get('/utama/dhcp?live=1')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('live', true)

@@ -43,6 +43,7 @@ class MikrotikSessionController extends Controller
                 return [
                     'id' => $session->id,
                     'name' => $session->name,
+                    'slug' => $session->slug,
                     'host' => $session->host,
                     'enabled' => $session->enabled,
                     'online' => (bool) ($payload['online'] ?? false),
@@ -61,9 +62,12 @@ class MikrotikSessionController extends Controller
         ]);
     }
 
-    public function edit(string $session, UnifiClient $unifi, UnifiSettingsController $settings): Response
+    public function edit(string $session, UnifiClient $unifi, UnifiSettingsController $settings): Response|RedirectResponse
     {
         $model = $this->named($session);
+        if ($session !== $model->slug) {
+            return redirect()->route('sites.show', ['session' => $model->slug]);
+        }
         $connection = UnifiConnection::forSession($model->id);
         $unifi->useSession($model->id);
 
@@ -93,7 +97,7 @@ class MikrotikSessionController extends Controller
     {
         $session = MikrotikSession::query()->create($this->validated($request, true));
 
-        return redirect()->route('sites.show', ['session' => $session->name]);
+        return redirect()->route('sites.show', ['session' => $session->slug]);
     }
 
     public function updateNamed(Request $request, string $session): RedirectResponse
@@ -105,7 +109,7 @@ class MikrotikSessionController extends Controller
     {
         $mikrotikSession->update($this->validated($request, false, $mikrotikSession));
 
-        return redirect()->route('sites.show', ['session' => $mikrotikSession->name]);
+        return redirect()->route('sites.show', ['session' => $mikrotikSession->slug]);
     }
 
     public function destroyNamed(Request $request, string $session): RedirectResponse
@@ -136,7 +140,7 @@ class MikrotikSessionController extends Controller
     {
         $request->session()->put('mikrotik_session_id', $mikrotikSession->id);
 
-        return redirect()->route('dashboard');
+        return redirect()->route('dashboard', ['site' => $mikrotikSession->slug]);
     }
 
     /**
@@ -144,7 +148,8 @@ class MikrotikSessionController extends Controller
      */
     private function named(string $session): MikrotikSession
     {
-        return MikrotikSession::query()->where('name', $session)->firstOrFail();
+        return MikrotikSession::query()->where('slug', $session)->first()
+            ?? MikrotikSession::query()->where('name', $session)->firstOrFail();
     }
 
     /**
@@ -161,6 +166,7 @@ class MikrotikSessionController extends Controller
         return [
             'id' => $session->id,
             'name' => $session->name,
+            'slug' => $session->slug,
             'host' => $session->host,
             'scheme' => $session->scheme,
             'transport' => $session->transport(),

@@ -3,11 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class MikrotikSession extends Model
 {
     protected $fillable = [
         'name',
+        'slug',
         'host',
         'scheme',
         'port',
@@ -28,6 +30,42 @@ class MikrotikSession extends Model
             'password' => 'encrypted',
             'enabled' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (MikrotikSession $session): void {
+            if ($session->slug && ! $session->isDirty('name')) {
+                return;
+            }
+
+            $session->slug = static::uniqueSlug((string) $session->name, $session->id);
+        });
+    }
+
+    public static function uniqueSlug(string $name, ?int $ignoreId = null): string
+    {
+        $reserved = [
+            'sesi', 'baru', 'login', 'logout', 'pengaturan', 'up',
+            'bandwidth', 'dhcp', 'dns', 'logs', 'security',
+            'access-points', 'bandwidth-policy',
+        ];
+        $base = Str::slug($name) ?: 'sesi';
+        if (in_array($base, $reserved, true)) {
+            $base .= '-router';
+        }
+
+        $slug = $base;
+        $suffix = 2;
+        while (static::query()
+            ->where('slug', $slug)
+            ->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId))
+            ->exists()) {
+            $slug = $base.'-'.$suffix;
+            $suffix++;
+        }
+
+        return $slug;
     }
 
     /**

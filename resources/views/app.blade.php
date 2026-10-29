@@ -15,7 +15,10 @@
                 var boardLive = localStorage.getItem('board.live') !== '0';
                 document.cookie = 'board_live=' + (boardLive ? '1' : '0') + ';path=/;max-age=31536000;SameSite=Lax';
                 var boardPaths = { '/': 1, '/bandwidth': 1, '/dhcp': 1, '/dns': 1, '/logs': 1, '/security': 1, '/pengaturan': 1, '/pengaturan/sesi': 1, '/pengaturan/unifi': 1, '/pengaturan/pengguna': 1 };
-                if (boardPaths[location.pathname]) {
+                var parts = location.pathname.split('/').filter(Boolean);
+                var rest = parts.length <= 1 ? '/' : '/' + parts.slice(1).join('/');
+                var onBoard = boardPaths[location.pathname] || (parts[0] && parts[0] !== 'sesi' && parts[0] !== 'login' && boardPaths[rest]);
+                if (onBoard) {
                     var params = new URLSearchParams(location.search);
                     if (boardLive && params.get('live') !== '1') {
                         params.delete('minutes');

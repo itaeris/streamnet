@@ -105,7 +105,7 @@ class AccessPointTest extends TestCase
 
         $this->actingAs(User::factory()->create())
             ->withSession(['mikrotik_session_id' => $second->id])
-            ->get('/access-points')
+            ->get('/cabang/access-points')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('unifi.configured', false)
@@ -170,7 +170,7 @@ class AccessPointTest extends TestCase
         $this->assertFalse($connection->fresh()->verify_tls);
 
         $this->actingAs($user)
-            ->get('/sesi/'.$session->name)
+            ->get('/sesi/'.$session->slug)
             ->assertOk()
             ->assertDontSee('secret-unifi-key', false);
     }
@@ -188,7 +188,7 @@ class AccessPointTest extends TestCase
 
         $this->actingAs(User::factory()->create())
             ->withSession(['mikrotik_session_id' => $session->id])
-            ->get('/access-points')
+            ->get('/aeris/access-points')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('AccessPoints', false)
