@@ -785,7 +785,13 @@ class MikrotikPoller
             ->pluck('router_id')
             ->flip();
 
-        $fresh = array_values(array_filter($entries, fn (array $entry) => ! isset($known[$entry['id']])));
+        $fresh = array_values(array_filter($entries, function (array $entry) use ($known) {
+            if (isset($known[$entry['id']])) {
+                return false;
+            }
+
+            return ! str_contains(strtolower((string) $entry['topics']), 'packet');
+        }));
 
         if ($fresh !== []) {
             RouterLog::query()->insert(array_map(fn (array $entry) => [
@@ -1067,17 +1073,46 @@ class MikrotikPoller
         }
 
         foreach ($this->rows($batch['logging'] ?? null) as $rule) {
-            if (str_contains(strtolower((string) ($rule['topics'] ?? '')), 'dns')) {
+            $topics = strtolower((string) ($rule['topics'] ?? ''));
+            if (! str_contains($topics, 'dns')) {
+                continue;
+            }
+
+            if (str_contains($topics, '!packet')) {
                 Cache::put($key, true, now()->addHours(6));
 
                 return;
             }
+
+            $id = (string) ($rule['.id'] ?? '');
+            if ($id === '') {
+                continue;
+            }
+
+            try {
+                $updated = $this->client->gather([
+                    'set' => ['method' => 'post', 'path' => 'system/logging/set', 'body' => [
+                        '.id' => $id,
+                        'topics' => 'dns,!packet',
+                    ]],
+                ], $session->connection());
+            } catch (Throwable) {
+                return;
+            }
+
+            if ($updated['set'] !== null) {
+                Cache::put($key, true, now()->addHours(6));
+            }
+
+            return;
         }
+
+        $path = $session->transport() === 'api' ? 'system/logging/add' : 'system/logging';
 
         try {
             $created = $this->client->gather([
-                'create' => ['method' => 'post', 'path' => 'system/logging', 'body' => [
-                    'topics' => 'dns',
+                'create' => ['method' => 'post', 'path' => $path, 'body' => [
+                    'topics' => 'dns,!packet',
                     'action' => 'memory',
                 ]],
             ], $session->connection());

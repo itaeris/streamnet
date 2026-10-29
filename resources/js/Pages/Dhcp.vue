@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import AppLayout from '../Layouts/AppLayout.vue';
 import LiveRate from '../Components/LiveRate.vue';
@@ -20,6 +20,7 @@ const props = defineProps({
     from: { type: Number, default: null },
     to: { type: Number, default: null },
     leases: { type: Array, default: () => [] },
+    dns: { type: Array, default: () => [] },
 });
 
 const live = useBoardPulse();
@@ -37,8 +38,17 @@ const rangeLabel = computed(() => {
 });
 
 const status = ref('all');
+const dnsEntries = ref([...(props.dns ?? [])]);
 const { open, preview, isOpen } = usePreview();
 const show = (value) => (value === null || value === undefined || value === '' ? '–' : String(value));
+
+watch(() => props.dns, (next) => {
+    dnsEntries.value = [...(next ?? [])];
+});
+
+function dnsFor(address) {
+    return dnsEntries.value.filter((row) => row.address === address).slice(0, 15);
+}
 
 function leasePreview(lease, sampledAt = null) {
     const blocked = Boolean(lease.blocked);
@@ -100,8 +110,44 @@ function leasePreview(lease, sampledAt = null) {
                     ],
                 }],
             },
+            {
+                id: 'dns',
+                icon: 'language',
+                label: 'DNS',
+                sections: dnsSections(lease.address),
+            },
         ],
     };
+}
+
+function dnsSections(address) {
+    const list = dnsFor(address);
+    const browser = list.find((row) => row.browser)?.browser || '';
+    const app = list[0]?.app || '';
+
+    if (list.length === 0) {
+        return [{
+            title: 'DNS',
+            rows: [{ label: 'Query', value: 'Belum ada.' }],
+        }];
+    }
+
+    return [
+        {
+            title: 'DNS',
+            rows: [
+                { label: 'Browser', value: browser || '–' },
+                { label: 'Aplikasi', value: app || '–' },
+            ],
+        },
+        {
+            title: 'Domain',
+            rows: list.map((row) => ({
+                label: String(row.time || '').slice(11, 19) || '–',
+                value: row.app ? `${row.domain} · ${row.app}` : row.domain,
+            })),
+        },
+    ];
 }
 
 function activeLease(live) {

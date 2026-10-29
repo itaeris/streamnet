@@ -29,6 +29,7 @@ class DhcpController extends Controller
             'to' => $window['to'],
             'live' => $window['live'],
             'leases' => $leases,
+            'dns' => $analytics->dnsForClients($session?->id, $window['start'], $window['end']),
         ]);
     }
 }

@@ -208,10 +208,10 @@ onBeforeUnmount(() => {
                         <p class="font-mono text-[10px] text-mute">{{ live ? 'Live' : '5 menit' }}</p>
                     </div>
                     <div class="mt-2 flex items-end justify-between gap-3">
-                        <p class="font-mono text-sm text-cyan">↓ RX <LiveRate :value="panel.stream.rx" /></p>
-                        <p class="font-mono text-sm text-ok">↑ TX <LiveRate :value="panel.stream.tx" /></p>
+                        <p class="font-mono text-sm text-cyan">↓ RX <LiveRate :key="`${panel.key}-rx`" :value="panel.stream.rx" /></p>
+                        <p class="font-mono text-sm text-ok">↑ TX <LiveRate :key="`${panel.key}-tx`" :value="panel.stream.tx" /></p>
                     </div>
-                    <TrafficChart class="mt-2" :points="series" axis height-class="h-32" />
+                    <TrafficChart :key="panel.key" class="mt-2" :points="series" axis height-class="h-32" />
                     <p v-if="panel.stream.flows != null" class="mt-1 font-mono text-[10px] text-mute">{{ panel.stream.flows }} koneksi aktif</p>
                 </section>
 

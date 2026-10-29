@@ -168,6 +168,33 @@ class AnalyticsQuery
     }
 
     /**
+     * Latest queries for each client, capped per address.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function dnsForClients(?int $sessionId, Carbon $start, Carbon $end, int $perAddress = 15): array
+    {
+        if ($sessionId === null) {
+            return [];
+        }
+
+        $ranked = DnsQuery::query()
+            ->select('*')
+            ->selectRaw('row_number() over (partition by address order by logged_at desc, id desc) as dns_rank')
+            ->where('mikrotik_session_id', $sessionId)
+            ->whereBetween('logged_at', [$start, $end]);
+
+        return DnsQuery::query()
+            ->fromSub($ranked, 'dns_ranked')
+            ->where('dns_rank', '<=', $perAddress)
+            ->orderByDesc('logged_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (DnsQuery $row) => $row->toPayload())
+            ->all();
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function recentEvents(?int $sessionId, Carbon $start, Carbon $end, int $limit = 40): array

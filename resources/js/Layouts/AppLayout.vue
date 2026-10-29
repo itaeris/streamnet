@@ -14,6 +14,7 @@ const page = usePage();
 const { theme, toggleTheme } = useTheme();
 const current = computed(() => page.url.split('?')[0]);
 const main = ref(null);
+const collapsed = ref(typeof window !== 'undefined' && localStorage.getItem('sidebar') === 'collapsed');
 const profileOpen = ref(false);
 const profileRoot = ref(null);
 const routerOpen = ref(false);
@@ -26,6 +27,13 @@ const initials = computed(() => {
 
     return (letters || '?').toUpperCase();
 });
+
+function toggleSidebar() {
+    collapsed.value = !collapsed.value;
+    profileOpen.value = false;
+    routerOpen.value = false;
+    localStorage.setItem('sidebar', collapsed.value ? 'collapsed' : 'open');
+}
 
 function closeMenus(event) {
     if (!profileRoot.value?.contains(event.target)) {
@@ -166,6 +174,9 @@ const dotClass = computed(() => {
         <header class="z-30 shrink-0">
             <div class="flex items-center justify-between gap-3 px-1">
                 <div class="flex min-w-0 items-center gap-3">
+                    <button type="button" class="hidden size-9 items-center justify-center rounded-lg text-mute hover:bg-tile hover:text-paper lg:flex" :title="collapsed ? 'Buka sidebar' : 'Tutup sidebar'" @click="toggleSidebar">
+                        <span class="material-symbols-outlined text-[20px]">{{ collapsed ? 'left_panel_open' : 'left_panel_close' }}</span>
+                    </button>
                     <div class="flex items-center gap-2">
                         <div class="flex size-8 shrink-0 items-center justify-center rounded-md bg-tile text-cyan">
                             <span class="material-symbols-outlined text-[20px]">hub</span>
@@ -214,9 +225,31 @@ const dotClass = computed(() => {
         </header>
         <div class="flex min-h-0 min-w-0 flex-1">
         <div class="shell-panel flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        <aside class="z-40 hidden h-full w-72 shrink-0 flex-col overflow-hidden border-r border-edge lg:flex">
-            <div class="p-3">
-                <div ref="routerRoot" class="rounded-lg bg-well p-3">
+        <aside class="z-40 hidden h-full shrink-0 flex-col border-r border-edge transition-[width] duration-200 lg:flex" :class="collapsed ? 'w-16' : 'w-72'">
+            <div class="px-3 pt-3">
+                <div ref="routerRoot" class="relative rounded-lg bg-well p-3" :class="collapsed ? 'flex justify-center p-2' : ''">
+                    <template v-if="collapsed">
+                        <button type="button" class="text-cyan" :title="currentSession?.name || 'Ganti router'" @click="routerOpen = !routerOpen">
+                            <span class="material-symbols-outlined text-[22px]">router</span>
+                        </button>
+                        <MenuPanel :open="routerOpen" class="absolute top-0 left-full z-50 ml-2 w-56 origin-top-left rounded-lg bg-menu p-2 shadow-md ring-1 ring-edge">
+                            <div class="flex flex-col gap-1">
+                                <Link
+                                    v-for="item in sessions"
+                                    :key="item.id"
+                                    :href="`/pengaturan/sesi/${item.id}/aktif`"
+                                    method="post"
+                                    as="button"
+                                    class="rounded-md px-2 py-1.5 text-left"
+                                    :class="item.id === page.props.currentSessionId ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile'"
+                                >
+                                    <span class="block truncate text-xs">{{ item.name }}</span>
+                                    <span class="block truncate font-mono text-[10px] opacity-80">{{ item.host }}</span>
+                                </Link>
+                            </div>
+                        </MenuPanel>
+                    </template>
+                    <template v-else>
                     <div class="flex items-center justify-between gap-2">
                         <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Active router</p>
                         <button type="button" class="text-mute" title="Ganti router" @click="routerOpen = !routerOpen">
@@ -241,48 +274,52 @@ const dotClass = computed(() => {
                         </Link>
                     </div>
                     </MenuPanel>
-                    <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-mist">
-                        <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-cyan">schedule</span>{{ formatUptime(pulse?.system?.uptime) }}</span>
-                        <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-ok">memory</span>{{ pulse?.system?.cpu_load ?? '–' }}%</span>
-                        <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-warn">thermostat</span>{{ pulse?.system?.temperature ?? '–' }}°C</span>
+                    <div class="mt-2 flex items-center justify-between gap-1.5 font-mono text-[11px] whitespace-nowrap text-mist">
+                        <span class="inline-flex min-w-0 items-center gap-1"><span class="material-symbols-outlined shrink-0 text-[14px] text-cyan">schedule</span><span class="truncate">{{ formatUptime(pulse?.system?.uptime) }}</span></span>
+                        <span class="inline-flex shrink-0 items-center gap-1"><span class="material-symbols-outlined text-[14px] text-ok">memory</span>{{ pulse?.system?.cpu_load ?? '–' }}%</span>
+                        <span class="inline-flex shrink-0 items-center gap-1"><span class="material-symbols-outlined text-[14px] text-warn">thermostat</span>{{ pulse?.system?.temperature ?? '–' }}°C</span>
                     </div>
+                    </template>
                 </div>
             </div>
 
-            <div class="px-3">
-                <p class="px-2 text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Telemetry navigation</p>
+            <div class="mt-5 px-3">
+                <p v-if="!collapsed" class="px-2 text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Telemetry navigation</p>
                 <nav class="mt-2 flex flex-col gap-1">
                     <Link
                         v-for="link in links"
                         :key="link.href"
                         :href="hrefFor(link.href)"
-                        class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition"
-                        :class="current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper'"
+                        class="flex items-center gap-3 rounded-lg py-2.5 text-sm transition"
+                        :class="[collapsed ? 'justify-center px-0' : 'px-3', current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper']"
+                        :title="link.label"
                     >
                         <span class="material-symbols-outlined text-[20px]">{{ link.icon }}</span>
-                        {{ link.label }}
+                        <span v-if="!collapsed">{{ link.label }}</span>
                     </Link>
                 </nav>
             </div>
 
             <div class="mt-auto flex flex-col gap-2 p-3">
-                <div class="flex items-center justify-between px-2 py-1">
+                <div v-if="!collapsed" class="flex items-center justify-between px-2 py-1">
                     <span class="font-mono text-[11px] text-mute">RouterOS</span>
                     <span class="rounded bg-tile px-1.5 py-0.5 font-mono text-[11px] text-cyan">{{ pulse?.system?.version || '–' }}</span>
                 </div>
-                <div ref="profileRoot" class="overflow-hidden rounded-3xl bg-tile">
-                    <button type="button" class="flex w-full items-center gap-2 px-2.5 py-2 text-left" @click="profileOpen = !profileOpen">
+                <div ref="profileRoot" class="relative rounded-3xl bg-tile" :class="collapsed ? '' : 'overflow-hidden'">
+                    <button type="button" class="flex w-full items-center gap-2 text-left" :class="collapsed ? 'justify-center px-1 py-2' : 'px-2.5 py-2'" :title="page.props.auth.user?.name" @click="profileOpen = !profileOpen">
                         <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-cyan-2 text-[11px] font-semibold text-[#003640]">
                             {{ initials }}
                         </div>
-                        <div class="min-w-0 flex-1">
-                            <p class="truncate text-xs font-semibold">{{ page.props.auth.user?.name }}</p>
-                            <p class="truncate font-mono text-[11px] text-mute">{{ page.props.auth.user?.email }}</p>
-                        </div>
-                        <span class="material-symbols-outlined shrink-0 text-[18px] text-mute transition-transform duration-200" :class="profileOpen ? 'rotate-180' : ''">expand_more</span>
+                        <template v-if="!collapsed">
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-xs font-semibold">{{ page.props.auth.user?.name }}</p>
+                                <p class="truncate font-mono text-[11px] text-mute">{{ page.props.auth.user?.email }}</p>
+                            </div>
+                            <span class="material-symbols-outlined shrink-0 text-[18px] text-mute transition-transform duration-200" :class="profileOpen ? 'rotate-180' : ''">expand_more</span>
+                        </template>
                     </button>
-                    <MenuPanel :open="profileOpen" inline>
-                        <div class="border-t border-edge">
+                    <MenuPanel :open="profileOpen" :inline="!collapsed" :class="collapsed ? 'absolute bottom-0 left-full z-50 mb-0 ml-2 w-52 origin-bottom-left rounded-lg bg-menu shadow-md ring-1 ring-edge' : ''">
+                        <div :class="collapsed ? '' : 'border-t border-edge'">
                             <Link
                                 :href="hrefFor('/pengaturan')"
                                 class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-hover"

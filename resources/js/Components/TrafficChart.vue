@@ -27,7 +27,7 @@ const glideMs = 900;
 const chart = computed(() => {
     const raw = rendered.value;
     const spanMinutes = raw.length > 1 && raw.at(-1)?.ts && raw[0]?.ts
-        ? (raw.at(-1).ts - raw[0].ts) / 60000
+        ? (raw.at(-1).ts - raw[0].ts) / 60
         : 0;
     const barsMode = spanMinutes >= 60;
     const source = live.value || barsMode ? raw : smooth(raw);
@@ -40,7 +40,9 @@ const chart = computed(() => {
     const max = niceCeil(rawMax);
     const plotHeight = height - padTop - 2;
     const yOf = (value) => padTop + (1 - (Number(value) || 0) / max) * plotHeight;
-    const domain = view.value;
+    const stamps = samples.map((point) => point.ts).filter((stamp) => stamp > 0);
+    const ownDomain = stamps.length > 1 ? { start: Math.min(...stamps), end: Math.max(...stamps) } : null;
+    const domain = view.value?.end > view.value?.start ? view.value : ownDomain;
     const timed = Boolean(domain && domain.end > domain.start);
     const xOf = (point, index) => {
         if (timed && point.ts) {
@@ -184,7 +186,7 @@ function continues(previous, next) {
 
     const previousStart = Number(previous[0]?.ts) || 0;
     const nextStart = Number(next[0]?.ts) || 0;
-    if (!(previousStart > 0 && nextStart > 0 && Math.abs(previousStart - nextStart) <= 2 && next.length <= previous.length + 2)) {
+    if (!(previousStart > 0 && nextStart > 0 && Math.abs(previousStart - nextStart) <= 2 && next.length >= previous.length && next.length <= previous.length + 2)) {
         return false;
     }
 
@@ -337,9 +339,9 @@ function bars(coords) {
         return '';
     }
 
-    const gaps = coords.slice(1).map((point, index) => Math.abs(point.x - coords[index].x)).filter((gap) => gap > 0.5);
-    const slot = gaps.length ? gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length : 8;
-    const barWidth = Math.max(1.6, Math.min(slot * 0.78, 18));
+    const gaps = coords.slice(1).map((point, index) => Math.abs(point.x - coords[index].x)).filter((gap) => gap > 0.5).sort((left, right) => left - right);
+    const slot = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 8;
+    const barWidth = Math.max(1.4, Math.min(slot * 0.72, 16));
 
     return coords.map((point) => {
         const y = Math.min(height - 0.5, Math.max(padTop, point.y));
@@ -385,8 +387,8 @@ function bars(coords) {
                     <path v-if="chart.bars" :d="chart.rxBars" :fill="`url(#${uid}-rx)`" />
                     <path v-if="!chart.bars" :d="chart.txArea" :fill="`url(#${uid}-tx)`" />
                     <path v-if="!chart.bars" :d="chart.rxArea" :fill="`url(#${uid}-rx)`" />
-                    <path :d="chart.txPath" fill="none" stroke="var(--color-ok)" :stroke-width="chart.bars ? 1.4 : 1.6" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
-                    <path :d="chart.rxPath" fill="none" stroke="var(--color-cyan)" :stroke-width="chart.bars ? 1.6 : 2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+                    <path v-if="!chart.bars" :d="chart.txPath" fill="none" stroke="var(--color-ok)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+                    <path v-if="!chart.bars" :d="chart.rxPath" fill="none" stroke="var(--color-cyan)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
                 </svg>
                 <span
                     v-if="axis"
