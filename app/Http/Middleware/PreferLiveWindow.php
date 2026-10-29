@@ -13,7 +13,7 @@ class PreferLiveWindow
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->isMethod('GET') || ! $request->is('/', 'bandwidth', 'dhcp', 'dns', 'logs', 'security', 'pengaturan', 'pengaturan/sesi', 'pengaturan/unifi')) {
+        if (! $request->isMethod('GET') || ! $request->is('/', 'bandwidth', 'dhcp', 'dns', 'logs', 'security', 'pengaturan', 'pengaturan/sesi', 'pengaturan/unifi', 'pengaturan/pengguna')) {
             return $next($request);
         }
 

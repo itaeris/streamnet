@@ -81,6 +81,7 @@ const titles = {
     '/pengaturan': 'Pengaturan',
     '/pengaturan/sesi': 'Pengaturan',
     '/pengaturan/unifi': 'Pengaturan',
+    '/pengaturan/pengguna': 'Pengaturan',
 };
 
 const { pulse, connected } = usePulse(() => page.props.pulse ?? null);

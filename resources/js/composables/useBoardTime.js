@@ -13,7 +13,7 @@ export const ranges = [
     { minutes: 2880, label: 'Last 2 days' },
 ];
 
-export const boardPaths = ['/', '/bandwidth', '/dhcp', '/dns', '/logs', '/security', '/pengaturan', '/pengaturan/sesi', '/pengaturan/unifi'];
+export const boardPaths = ['/', '/bandwidth', '/dhcp', '/dns', '/logs', '/security', '/pengaturan', '/pengaturan/sesi', '/pengaturan/unifi', '/pengaturan/pengguna'];
 
 export const refreshes = [
     { id: 'off', label: 'Off', seconds: 0 },
@@ -65,6 +65,7 @@ const liveProps = {
     '/pengaturan': [],
     '/pengaturan/sesi': ['sessions'],
     '/pengaturan/unifi': [],
+    '/pengaturan/pengguna': [],
 };
 
 function livePropsFor(url) {

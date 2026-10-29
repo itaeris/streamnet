@@ -11,6 +11,7 @@ use App\Http\Controllers\LogController;
 use App\Http\Controllers\MikrotikSessionController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\UnifiSettingsController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -34,6 +35,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/pengaturan', [MikrotikSessionController::class, 'account'])->name('settings');
     Route::get('/pengaturan/sesi', [MikrotikSessionController::class, 'index'])->name('settings.sessions');
     Route::put('/pengaturan/password', [LoginController::class, 'updatePassword'])->name('settings.password');
+    Route::get('/pengaturan/pengguna', [UserController::class, 'index'])->name('settings.users');
+    Route::post('/pengaturan/pengguna', [UserController::class, 'store'])->name('settings.users.store');
+    Route::put('/pengaturan/pengguna/{user}', [UserController::class, 'update'])->name('settings.users.update');
+    Route::delete('/pengaturan/pengguna/{user}', [UserController::class, 'destroy'])->name('settings.users.destroy');
     Route::get('/pengaturan/unifi', [UnifiSettingsController::class, 'show'])->name('settings.unifi');
     Route::put('/pengaturan/unifi', [UnifiSettingsController::class, 'update'])->name('settings.unifi.update');
     Route::delete('/pengaturan/unifi', [UnifiSettingsController::class, 'destroy'])->name('settings.unifi.destroy');
