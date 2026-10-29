@@ -129,7 +129,7 @@ class BandwidthPolicyTest extends TestCase
     public function test_incidents_export_to_excel_for_the_chosen_range(): void
     {
         $session = $this->router();
-        foreach ([now()->subHour(), now()->subDays(3)] as $index => $at) {
+        foreach ([now(), now()->subDays(3)] as $index => $at) {
             SecurityEvent::query()->create([
                 'mikrotik_session_id' => $session->id,
                 'occurred_at' => $at,
