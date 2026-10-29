@@ -51,6 +51,23 @@ let lastLiveReload = 0;
 let reloadTimer = 0;
 const liveReloadGap = 5000;
 
+// Live pages only re-fetch what the websocket pulse does not already carry.
+// Chart history is extended client-side from each pulse, so it is never re-sent.
+const liveProps = {
+    '/': ['logs', 'events'],
+    '/bandwidth': [],
+    '/dhcp': [],
+    '/dns': ['queries'],
+    '/logs': ['logs'],
+    '/security': ['events'],
+    '/pengaturan': [],
+    '/pengaturan/sesi': ['sessions'],
+};
+
+function livePropsFor(url) {
+    return liveProps[String(url || '').split('?')[0]];
+}
+
 function rememberLive(on) {
     localStorage.setItem('board.live', on ? '1' : '0');
     document.cookie = `board_live=${on ? '1' : '0'};path=/;max-age=31536000;SameSite=Lax`;
@@ -110,9 +127,15 @@ export function syncLivePage() {
         return;
     }
 
+    const only = livePropsFor(window.location.pathname);
+    if (only && only.length === 0) {
+        return;
+    }
+
     reloading = true;
     lastLiveReload = Date.now();
     router.reload({
+        ...(only ? { only } : {}),
         async: true,
         preserveState: true,
         preserveScroll: true,

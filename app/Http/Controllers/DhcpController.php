@@ -7,6 +7,7 @@ use App\Models\LiveSnapshot;
 use App\Services\AnalyticsQuery;
 use App\Services\Mikrotik\CurrentMikrotikSession;
 use App\Services\Mikrotik\MikrotikClient;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -19,7 +20,7 @@ class DhcpController extends Controller
         $window = $analytics->window($request);
         $session = $current->resolve();
         $now = now();
-        $leases = DhcpLease::query()->where('mikrotik_session_id', $session?->id)->get()
+        $leases = fn () => DhcpLease::query()->where('mikrotik_session_id', $session?->id)->get()
             ->filter(fn (DhcpLease $lease) => $analytics->seenAt($lease->last_seen, $now)->between($window['start'], $window['end']))
             ->sortBy(fn (DhcpLease $lease) => sprintf('%u', ip2long((string) $lease->address) ?: 0))
             ->values()
@@ -32,7 +33,18 @@ class DhcpController extends Controller
             'to' => $window['to'],
             'live' => $window['live'],
             'leases' => $leases,
-            'dns' => $analytics->dnsForClients($session?->id, $window['start'], $window['end']),
+        ]);
+    }
+
+    public function dns(Request $request, AnalyticsQuery $analytics, CurrentMikrotikSession $current): JsonResponse
+    {
+        $data = $request->validate([
+            'address' => ['required', 'ip'],
+        ]);
+        $window = $analytics->window($request);
+
+        return response()->json([
+            'queries' => $analytics->dnsForAddress($current->resolve()?->id, $data['address'], $window['start'], $window['end']),
         ]);
     }
 

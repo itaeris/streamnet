@@ -776,6 +776,11 @@ class MikrotikPoller
             ];
         }
 
+        $entries = array_values(array_filter($entries, fn (array $entry) => ! str_contains(strtolower((string) $entry['topics']), 'packet')));
+        $queries = array_values(array_filter($entries, fn (array $entry) => $this->dns->isResolverLine((string) $entry['topics'], (string) $entry['message'])));
+        $entries = array_values(array_filter($entries, fn (array $entry) => ! $this->dns->isResolverLine((string) $entry['topics'], (string) $entry['message'])));
+        $this->storeDns($queries, $sampledAt);
+
         if ($entries === []) {
             return [];
         }
@@ -786,13 +791,7 @@ class MikrotikPoller
             ->pluck('router_id')
             ->flip();
 
-        $fresh = array_values(array_filter($entries, function (array $entry) use ($known) {
-            if (isset($known[$entry['id']])) {
-                return false;
-            }
-
-            return ! str_contains(strtolower((string) $entry['topics']), 'packet');
-        }));
+        $fresh = array_values(array_filter($entries, fn (array $entry) => ! isset($known[$entry['id']])));
 
         if ($fresh !== []) {
             RouterLog::query()->insert(array_map(fn (array $entry) => [
@@ -805,7 +804,6 @@ class MikrotikPoller
                 'created_at' => $sampledAt,
                 'updated_at' => $sampledAt,
             ], $fresh));
-            $this->storeDns($fresh, $sampledAt);
 
             usort($fresh, fn (array $left, array $right) => strcmp($right['time'], $left['time']));
             $created = 0;
@@ -1131,23 +1129,54 @@ class MikrotikPoller
      */
     private function storeDns(array $entries, Carbon $sampledAt): void
     {
-        $rows = [];
+        $parsed = [];
 
         foreach ($entries as $entry) {
-            $parsed = $this->dns->parse((string) ($entry['topics'] ?? ''), (string) ($entry['message'] ?? ''));
-            if ($parsed === null || ($entry['id'] ?? '') === '') {
+            $query = $this->dns->parse((string) ($entry['topics'] ?? ''), (string) ($entry['message'] ?? ''));
+            if ($query !== null && ($entry['id'] ?? '') !== '') {
+                $parsed[] = [$entry, $query];
+            }
+        }
+
+        if ($parsed === []) {
+            return;
+        }
+
+        usort($parsed, fn (array $left, array $right) => strcmp($left[0]['time'], $right[0]['time']));
+        $window = 60;
+        $since = Carbon::parse($parsed[0][0]['time'])->subSeconds($window);
+        $latest = [];
+
+        DnsQuery::query()
+            ->where('mikrotik_session_id', $this->router->id)
+            ->whereIn('address', array_unique(array_map(fn (array $pair) => $pair[1]['address'], $parsed)))
+            ->where('logged_at', '>=', $since)
+            ->toBase()
+            ->get(['address', 'domain', 'logged_at'])
+            ->each(function (object $row) use (&$latest) {
+                $key = $row->address.'|'.$row->domain;
+                $latest[$key] = max($latest[$key] ?? 0, strtotime((string) $row->logged_at));
+            });
+
+        $rows = [];
+
+        foreach ($parsed as [$entry, $query]) {
+            $key = $query['address'].'|'.$query['domain'];
+            $at = strtotime((string) $entry['time']);
+            if (isset($latest[$key]) && $at - $latest[$key] < $window) {
                 continue;
             }
+            $latest[$key] = $at;
 
             $rows[] = [
                 'mikrotik_session_id' => $this->router->id,
                 'router_id' => $entry['id'],
                 'logged_at' => $entry['time'],
-                'address' => $parsed['address'],
-                'domain' => $parsed['domain'],
-                'qtype' => $parsed['qtype'],
-                'app' => $parsed['app'],
-                'browser' => $parsed['browser'],
+                'address' => $query['address'],
+                'domain' => $query['domain'],
+                'qtype' => $query['qtype'],
+                'app' => $query['app'],
+                'browser' => $query['browser'],
                 'created_at' => $sampledAt,
                 'updated_at' => $sampledAt,
             ];

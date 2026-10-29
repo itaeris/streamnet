@@ -92,6 +92,16 @@ class DnsActivity
         'opera.com' => 'Opera',
     ];
 
+    public function isResolverLine(string $topics, string $message): bool
+    {
+        $parts = array_map('trim', explode(',', strtolower($topics)));
+        if (! in_array('dns', $parts, true) || array_intersect($parts, ['error', 'warning', 'critical']) !== []) {
+            return false;
+        }
+
+        return (bool) preg_match('/^\s*(query from|done query|local query)\b/i', $message);
+    }
+
     /**
      * @return array{address: string, domain: string, qtype: string, app: string, browser: ?string}|null
      */

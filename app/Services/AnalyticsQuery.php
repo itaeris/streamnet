@@ -99,6 +99,7 @@ class AnalyticsQuery
             ->where('name', $name)
             ->whereBetween('sampled_at', [$start, $end])
             ->orderBy('sampled_at')
+            ->toBase()
             ->get(['sampled_at', 'rx_bps', 'tx_bps']);
 
         return $this->downsample($rows, $maxPoints, $start, $end);
@@ -119,6 +120,7 @@ class AnalyticsQuery
             ->whereIn('name', $names)
             ->whereBetween('sampled_at', [$start, $end])
             ->orderBy('sampled_at')
+            ->toBase()
             ->get(['name', 'sampled_at', 'rx_bps', 'tx_bps']);
 
         return $rows
@@ -168,27 +170,23 @@ class AnalyticsQuery
     }
 
     /**
-     * Latest queries for each client, capped per address.
+     * Latest queries from one client.
      *
      * @return array<int, array<string, mixed>>
      */
-    public function dnsForClients(?int $sessionId, Carbon $start, Carbon $end, int $perAddress = 15): array
+    public function dnsForAddress(?int $sessionId, string $address, Carbon $start, Carbon $end, int $limit = 15): array
     {
         if ($sessionId === null) {
             return [];
         }
 
-        $ranked = DnsQuery::query()
-            ->select('*')
-            ->selectRaw('row_number() over (partition by address order by logged_at desc, id desc) as dns_rank')
-            ->where('mikrotik_session_id', $sessionId)
-            ->whereBetween('logged_at', [$start, $end]);
-
         return DnsQuery::query()
-            ->fromSub($ranked, 'dns_ranked')
-            ->where('dns_rank', '<=', $perAddress)
+            ->where('mikrotik_session_id', $sessionId)
+            ->where('address', $address)
+            ->whereBetween('logged_at', [$start, $end])
             ->orderByDesc('logged_at')
             ->orderByDesc('id')
+            ->limit($limit)
             ->get()
             ->map(fn (DnsQuery $row) => $row->toPayload())
             ->all();
@@ -240,24 +238,40 @@ class AnalyticsQuery
     }
 
     /**
-     * @param  Collection<int, InterfaceSample>  $rows
+     * Average samples into at most $maxPoints time buckets.
+     *
+     * @param  Collection<int, object>  $rows
      * @return array<int, array{t: string, ts: int, rx: int, tx: int}>
      */
     private function downsample(Collection $rows, int $maxPoints, Carbon $start, Carbon $end): array
     {
-        $step = max(1, (int) ceil($rows->count() / max(1, $maxPoints)));
-        $format = $start->diffInHours($end) >= 24 ? 'd M H:i' : 'H:i:s';
+        if ($rows->isEmpty()) {
+            return [];
+        }
 
-        return $rows
-            ->values()
-            ->filter(fn ($row, int $index) => $index % $step === 0)
-            ->map(fn (InterfaceSample $row) => [
-                't' => $row->sampled_at?->timezone(config('app.timezone'))->format($format) ?? '',
-                'ts' => $row->sampled_at?->getTimestamp() ?? 0,
-                'rx' => (int) $row->rx_bps,
-                'tx' => (int) $row->tx_bps,
-            ])
-            ->values()
-            ->all();
+        $stamps = $rows->map(fn (object $row) => strtotime((string) $row->sampled_at) ?: 0);
+        $first = (int) $stamps->first();
+        $span = max(1, (int) $stamps->last() - $first);
+        $bucket = $rows->count() <= $maxPoints ? 0 : (int) ceil($span / max(1, $maxPoints));
+        $format = $start->diffInHours($end) >= 24 ? 'd M H:i' : 'H:i:s';
+        $timezone = config('app.timezone');
+        $groups = [];
+
+        foreach ($rows->values() as $index => $row) {
+            $ts = (int) $stamps[$index];
+            $key = $bucket > 0 ? intdiv($ts - $first, $bucket) : $index;
+            $group = $groups[$key] ?? ['ts' => $ts, 'rx' => 0, 'tx' => 0, 'n' => 0];
+            $group['rx'] += (int) $row->rx_bps;
+            $group['tx'] += (int) $row->tx_bps;
+            $group['n']++;
+            $groups[$key] = $group;
+        }
+
+        return array_values(array_map(fn (array $group) => [
+            't' => Carbon::createFromTimestamp($group['ts'], $timezone)->format($format),
+            'ts' => $group['ts'],
+            'rx' => intdiv($group['rx'], $group['n']),
+            'tx' => intdiv($group['tx'], $group['n']),
+        ], $groups));
     }
 }

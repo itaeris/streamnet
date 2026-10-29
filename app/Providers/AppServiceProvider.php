@@ -21,6 +21,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
+            DevCommands::artisan('octane:start --watch --host=127.0.0.1 --port=8000', 'server')->blue();
             DevCommands::artisan('reverb:start', 'reverb')->yellow();
             DevCommands::artisan('mikrotik:watch', 'mikrotik')->green();
         }

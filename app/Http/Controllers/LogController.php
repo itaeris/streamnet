@@ -21,7 +21,7 @@ class LogController extends Controller
             'from' => $window['from'],
             'to' => $window['to'],
             'live' => $window['live'],
-            'logs' => $analytics->recentLogs($session?->id, $window['start'], $window['end'], 250),
+            'logs' => fn () => $analytics->recentLogs($session?->id, $window['start'], $window['end'], 250),
         ]);
     }
 }

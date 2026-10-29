@@ -31,7 +31,16 @@ npm run build
 composer dev
 ```
 
-`composer dev` menjalankan server aplikasi, Reverb, dan `php artisan mikrotik:watch`. Pemantau menggilir setiap sesi yang diaktifkan setiap `MIKROTIK_POLL_SECONDS` (bawaan 5 detik) dan menyiarkan hasilnya ke kanal `mikrotik`.
+`composer dev` menjalankan server aplikasi lewat Laravel Octane (FrankenPHP, worker mode, `--watch`), Reverb, dan `php artisan mikrotik:watch`. Pemantau menggilir setiap sesi yang diaktifkan setiap `MIKROTIK_POLL_SECONDS` (bawaan 5 detik) dan menyiarkan hasilnya ke kanal `mikrotik`.
+
+Binary `frankenphp` diunduh ke root proyek oleh `php artisan octane:install --server=frankenphp` dan tidak ikut di-commit. Di produksi:
+
+```bash
+php artisan octane:start --host=0.0.0.0 --port=8000
+php artisan octane:reload   # setelah deploy
+```
+
+FrankenPHP membawa PHP sendiri. `PHP_INI_SCAN_DIR` dikosongkan untuk proses itu (`OCTANE_PHP_INI_SCAN_DIR`) supaya tidak memuat ekstensi `.so` milik PHP sistem.
 
 Satu sampel saja:
 

@@ -21,7 +21,7 @@ class DnsController extends Controller
             'from' => $window['from'],
             'to' => $window['to'],
             'live' => $window['live'],
-            'queries' => $analytics->dnsQueries($session?->id, $window['start'], $window['end']),
+            'queries' => fn () => $analytics->dnsQueries($session?->id, $window['start'], $window['end']),
         ]);
     }
 }

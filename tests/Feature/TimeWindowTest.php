@@ -26,6 +26,30 @@ class TimeWindowTest extends TestCase
         $this->assertStringEndsWith('/?live=1', (string) $response->headers->get('Location'));
     }
 
+    public function test_live_reload_only_sends_the_requested_props(): void
+    {
+        $user = User::factory()->create();
+
+        $version = $this->actingAs($user)->get('/?live=1')->viewData('page')['version'] ?? '';
+
+        $props = $this->actingAs($user)
+            ->withHeaders([
+                'X-Inertia' => 'true',
+                'X-Inertia-Version' => (string) $version,
+                'X-Inertia-Partial-Component' => 'Dashboard',
+                'X-Inertia-Partial-Data' => 'logs,events',
+            ])
+            ->get('/?live=1')
+            ->assertOk()
+            ->json('props');
+
+        $this->assertArrayHasKey('logs', $props);
+        $this->assertArrayHasKey('events', $props);
+        $this->assertArrayNotHasKey('series', $props);
+        $this->assertArrayNotHasKey('bridge', $props);
+        $this->assertArrayNotHasKey('pulse', $props);
+    }
+
     public function test_unknown_range_falls_back_to_thirty_minutes(): void
     {
         $user = User::factory()->create();

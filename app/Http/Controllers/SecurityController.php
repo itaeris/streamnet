@@ -21,7 +21,7 @@ class SecurityController extends Controller
             'from' => $window['from'],
             'to' => $window['to'],
             'live' => $window['live'],
-            'events' => $analytics->recentEvents($session?->id, $window['start'], $window['end'], 60),
+            'events' => fn () => $analytics->recentEvents($session?->id, $window['start'], $window['end'], 60),
         ]);
     }
 }

@@ -7,6 +7,7 @@ use App\Models\DnsQuery;
 use App\Models\InterfaceSample;
 use App\Models\LiveSnapshot;
 use App\Models\MikrotikSession;
+use App\Models\RouterLog;
 use App\Models\SecurityEvent;
 use App\Services\Mikrotik\MikrotikPoller;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -373,6 +374,30 @@ class MikrotikPollerTest extends TestCase
                         'topics' => 'dns',
                         'message' => 'query from 10.10.10.10: #14 10.10.10.1.in-addr.arpa. PTR',
                     ],
+                    [
+                        '.id' => '*24',
+                        'time' => '2026-10-29 11:00:30',
+                        'topics' => 'dns',
+                        'message' => 'query from 10.10.10.10: #15 www.youtube.com. A',
+                    ],
+                    [
+                        '.id' => '*25',
+                        'time' => '2026-10-29 11:01:05',
+                        'topics' => 'dns',
+                        'message' => 'query from 10.10.10.10: #16 www.youtube.com. A',
+                    ],
+                    [
+                        '.id' => '*27',
+                        'time' => '2026-10-29 11:01:05',
+                        'topics' => 'dns',
+                        'message' => 'done query: #16 www.youtube.com. 142.250.4.93',
+                    ],
+                    [
+                        '.id' => '*26',
+                        'time' => '2026-10-29 11:01:06',
+                        'topics' => 'dhcp,info',
+                        'message' => 'defconf assigned 10.10.10.10',
+                    ],
                 ],
                 default => [],
             };
@@ -383,7 +408,9 @@ class MikrotikPollerTest extends TestCase
         $payload = app(MikrotikPoller::class)->poll($session);
 
         $this->assertTrue($payload['online']);
-        $this->assertSame(2, DnsQuery::query()->count());
+        $this->assertSame(3, DnsQuery::query()->count());
+        $this->assertSame(['*21', '*22', '*25'], DnsQuery::query()->orderBy('router_id')->pluck('router_id')->all());
+        $this->assertSame(['*26'], RouterLog::query()->pluck('router_id')->all());
         $this->assertDatabaseHas('dns_queries', [
             'address' => '10.10.10.10',
             'domain' => 'www.youtube.com',

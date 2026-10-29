@@ -21,7 +21,6 @@ const props = defineProps({
     from: { type: Number, default: null },
     to: { type: Number, default: null },
     leases: { type: Array, default: () => [] },
-    dns: { type: Array, default: () => [] },
 });
 
 const live = useBoardPulse();
@@ -39,16 +38,57 @@ const rangeLabel = computed(() => {
 });
 
 const status = ref('all');
-const dnsEntries = ref([...(props.dns ?? [])]);
+const dnsByAddress = ref({});
 const { open, preview, isOpen } = usePreview();
 const show = (value) => (value === null || value === undefined || value === '' ? '–' : String(value));
+let dnsFetchedAt = 0;
+let dnsAddress = '';
 
-watch(() => props.dns, (next) => {
-    dnsEntries.value = [...(next ?? [])];
+function previewAddress() {
+    const key = preview.value?.key || '';
+
+    return key.startsWith('lease:') ? key.split(':')[1] || '' : '';
+}
+
+async function loadDns(address) {
+    const params = new URLSearchParams(window.location.search);
+    const query = new URLSearchParams({ address });
+    ['live', 'minutes', 'from', 'to'].forEach((name) => {
+        if (params.has(name)) {
+            query.set(name, params.get(name));
+        }
+    });
+
+    dnsAddress = address;
+    dnsFetchedAt = Date.now();
+
+    try {
+        const response = await fetch(`/dhcp/dns?${query}`, { headers: { Accept: 'application/json' } });
+        if (!response.ok) {
+            return;
+        }
+        const data = await response.json();
+        dnsByAddress.value = { ...dnsByAddress.value, [address]: data.queries ?? [] };
+    } catch {
+        // Keep the last list; the next refresh retries.
+    }
+}
+
+watch(previewAddress, (address) => {
+    if (address) {
+        loadDns(address);
+    }
+}, { immediate: true });
+
+watch(() => live.value?.sampled_at, () => {
+    const address = previewAddress();
+    if (address && (address !== dnsAddress || Date.now() - dnsFetchedAt > 15000)) {
+        loadDns(address);
+    }
 });
 
 function dnsFor(address) {
-    return dnsEntries.value.filter((row) => row.address === address).slice(0, 15);
+    return dnsByAddress.value[address] ?? null;
 }
 
 function leasePreview(lease, sampledAt = null) {
@@ -123,6 +163,13 @@ function leasePreview(lease, sampledAt = null) {
 
 function dnsSections(address) {
     const list = dnsFor(address);
+    if (list === null) {
+        return [{
+            title: 'DNS',
+            rows: [{ label: 'Query', value: 'Memuat…' }],
+        }];
+    }
+
     const browser = list.find((row) => row.browser)?.browser || '';
     const app = list[0]?.app || '';
 

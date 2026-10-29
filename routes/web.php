@@ -19,6 +19,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
     Route::get('/bandwidth', BandwidthController::class)->name('bandwidth');
     Route::get('/dhcp', DhcpController::class)->name('dhcp');
+    Route::get('/dhcp/dns', [DhcpController::class, 'dns'])->name('dhcp.dns');
     Route::put('/dhcp/alias', [DhcpController::class, 'updateComment'])->name('dhcp.alias');
     Route::get('/dns', DnsController::class)->name('dns');
     Route::get('/logs', LogController::class)->name('logs');
