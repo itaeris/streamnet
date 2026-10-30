@@ -12,6 +12,7 @@ use App\Models\RouterLog;
 use App\Models\SecurityEvent;
 use App\Models\SystemSample;
 use App\Services\DnsActivity;
+use App\Services\DnsFilterSchedule;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -399,6 +400,10 @@ class MikrotikPoller
 
             return $payload;
         });
+
+        if (($payload['online'] ?? false) === true) {
+            $this->enforceDnsSchedule();
+        }
 
         if (Cache::add('mikrotik.prune', true, now()->addMinutes(10))) {
             $this->prune();
@@ -1521,6 +1526,27 @@ class MikrotikPoller
 
         if ($rows !== []) {
             QueueSample::query()->insert($rows);
+        }
+    }
+
+    private function enforceDnsSchedule(): void
+    {
+        if ($this->router === null) {
+            return;
+        }
+
+        $minute = now()->format('Y-m-d H:i');
+        $key = 'mikrotik.'.$this->router->id.'.dns-schedule';
+        if (Cache::get($key) === $minute) {
+            return;
+        }
+
+        Cache::put($key, $minute, 180);
+
+        try {
+            app(DnsFilterSchedule::class)->enforce($this->router);
+        } catch (Throwable $exception) {
+            report($exception);
         }
     }
 

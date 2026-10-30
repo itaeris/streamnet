@@ -272,7 +272,7 @@ const badge = 'rounded px-1.5 py-0.5 font-mono text-[11px]';
 const findingColumns = [
     { id: 'severity', label: 'Severity', type: 'number', first: 'desc', get: (row) => severityRank[row.severity] ?? 0, show: (row) => row.severity },
     { id: 'category', label: 'Kategori', type: 'text', first: 'asc', get: (row) => row.category || '', class: 'font-mono text-mist' },
-    { id: 'title', label: 'Temuan', type: 'text', first: 'asc', get: (row) => row.title || '' },
+    { id: 'title', label: 'Temuan', type: 'text', first: 'asc', get: (row) => row.title || '', class: 'text-xs' },
     { id: 'detail', label: 'Detail', type: 'text', first: 'asc', get: (row) => row.detail || '', class: 'font-mono text-[11px] text-mist' },
 ];
 

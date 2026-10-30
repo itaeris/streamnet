@@ -500,7 +500,7 @@ class DnsFilter
         return $this->hostname(substr($comment, strlen('StreamNet:')));
     }
 
-    private function hostname(mixed $value): ?string
+    public function hostname(mixed $value): ?string
     {
         $domain = strtolower(trim((string) $value));
         $domain = (string) preg_replace('#^https?://#', '', $domain);

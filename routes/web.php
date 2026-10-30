@@ -42,6 +42,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/dns-filter', [DnsFilterController::class, 'index']);
     Route::post('/dns-filter', [DnsFilterController::class, 'store'])->name('dns-filter.store');
     Route::put('/dns-filter', [DnsFilterController::class, 'update'])->name('dns-filter.update');
+    Route::put('/dns-filter/schedule', [DnsFilterController::class, 'schedule'])->name('dns-filter.schedule');
     Route::delete('/dns-filter', [DnsFilterController::class, 'destroy'])->name('dns-filter.destroy');
     Route::get('/access-points', AccessPointController::class);
     Route::get('/topology', TopologyController::class);

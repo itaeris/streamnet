@@ -559,14 +559,18 @@ const steps = [
         <article class="noc-card p-3">
             <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Kapasitas queue</p>
             <p class="mt-1 text-2xl font-bold">{{ main ? formatRate(main.max_down) : '–' }}</p>
-            <p class="font-mono text-[11px] text-mute">upload {{ main ? formatRate(main.max_up) : '–' }}</p>
+            <p class="font-mono text-[11px] text-mute">{{ main ? `download ${formatRate(main.max_down)} · upload ${formatRate(main.max_up)}` : '–' }}</p>
         </article>
         <article class="noc-card p-3">
             <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Pemakaian sekarang</p>
             <p class="mt-1 text-2xl font-bold text-cyan"><LiveRate :value="main?.rate_down ?? 0" /></p>
-            <p class="font-mono text-[11px]" :class="usageUp >= 70 ? 'text-warn' : 'text-ok'">upload <LiveRate :value="main?.rate_up ?? 0" /></p>
-            <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-well">
+            <p class="font-mono text-[11px]" :class="usage >= 70 ? 'text-warn' : 'text-cyan'">download</p>
+            <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-well">
                 <div class="h-full rounded-full transition-all duration-500" :class="usage >= 90 ? 'bg-danger' : usage >= 70 ? 'bg-warn' : 'bg-cyan'" :style="{ width: `${usage}%` }" />
+            </div>
+            <p class="mt-2 font-mono text-[11px]" :class="usageUp >= 70 ? 'text-warn' : 'text-ok'">upload <LiveRate :value="main?.rate_up ?? 0" /></p>
+            <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-well">
+                <div class="h-full rounded-full transition-all duration-500" :class="usageUp >= 90 ? 'bg-danger' : usageUp >= 70 ? 'bg-warn' : 'bg-ok'" :style="{ width: `${usageUp}%` }" />
             </div>
         </article>
         <article class="noc-card p-3">
@@ -577,7 +581,7 @@ const steps = [
         <article class="noc-card p-3">
             <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Batas per klien</p>
             <p class="mt-1 text-2xl font-bold" :class="capDown > 0 ? 'text-ok' : 'text-warn'">{{ capDown > 0 ? formatRate(capDown) : 'Bagi rata' }}</p>
-            <p class="font-mono text-[11px] text-mute">{{ capDown > 0 ? `upload ${formatRate(upType?.rate)}` : 'tanpa plafon' }}</p>
+            <p class="font-mono text-[11px] text-mute">{{ capDown > 0 ? `download ${formatRate(capDown)} · upload ${formatRate(upType?.rate)}` : 'tanpa plafon' }}</p>
         </article>
     </section>
 
