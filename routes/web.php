@@ -41,6 +41,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/dns/logo', SiteLogoController::class)->middleware('throttle:120,1');
     Route::get('/dns-filter', [DnsFilterController::class, 'index']);
     Route::post('/dns-filter', [DnsFilterController::class, 'store'])->name('dns-filter.store');
+    Route::put('/dns-filter', [DnsFilterController::class, 'update'])->name('dns-filter.update');
     Route::delete('/dns-filter', [DnsFilterController::class, 'destroy'])->name('dns-filter.destroy');
     Route::get('/access-points', AccessPointController::class);
     Route::get('/topology', TopologyController::class);

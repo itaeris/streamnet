@@ -13,6 +13,8 @@ class DnsFilter
 
     public const RULE = 'StreamNet';
 
+    private const HOLD = 'streamnet-hold.invalid';
+
     public function __construct(private MikrotikClient $client) {}
 
     /**
@@ -34,6 +36,7 @@ class DnsFilter
 
         $layer7Id = null;
         $regexp = '';
+        $layerComment = '';
         foreach ($this->rows($result['layer7']) as $row) {
             if (($row['name'] ?? '') !== self::LIST) {
                 continue;
@@ -41,25 +44,34 @@ class DnsFilter
 
             $layer7Id = (string) ($row['.id'] ?? '');
             $regexp = (string) ($row['regexp'] ?? '');
+            $layerComment = (string) ($row['comment'] ?? '');
         }
 
-        $inRegexp = $this->domainsIn($regexp);
         $sites = [];
-        foreach ($inRegexp as $domain) {
+        foreach ($this->domainsIn($regexp) as $domain) {
             $sites[$domain]['layer7'] = true;
+            $sites[$domain]['enabled'] = true;
+        }
+        foreach ($this->paused($layerComment) as $domain) {
+            $sites[$domain]['enabled'] = $sites[$domain]['enabled'] ?? false;
         }
 
-        $ruleIds = [];
+        $rules = [];
+        $packets = 0;
+        $bytes = 0;
         $legacyFilterIds = [];
         foreach ($this->rows($result['filter']) as $row) {
-            if (! $this->enabled($row)) {
+            $id = (string) ($row['.id'] ?? '');
+            if ($this->isLayer7Rule($row)) {
+                $on = $this->enabled($row);
+                $rules[] = ['id' => $id, 'disabled' => ! $on];
+                $packets += (int) ($row['packets'] ?? 0);
+                $bytes += (int) ($row['bytes'] ?? 0);
+
                 continue;
             }
 
-            $id = (string) ($row['.id'] ?? '');
-            if ($this->isLayer7Rule($row)) {
-                $ruleIds[] = $id;
-
+            if (! $this->enabled($row)) {
                 continue;
             }
 
@@ -108,12 +120,16 @@ class DnsFilter
             $natIds[] = (string) ($row['.id'] ?? '');
         }
 
+        $ruleIds = array_values(array_filter(array_column($rules, 'id')));
+        $dropping = collect($rules)->contains(fn (array $rule) => ! $rule['disabled']);
         $listed = [];
         foreach ($sites as $domain => $site) {
+            $enabled = (bool) ($site['enabled'] ?? false);
             $listed[] = [
                 'domain' => $domain,
+                'enabled' => $enabled,
                 'layer7' => (bool) ($site['layer7'] ?? false),
-                'firewall' => $ruleIds !== [] && (bool) ($site['layer7'] ?? false),
+                'firewall' => $dropping && $enabled,
                 'dns_ids' => array_values(array_filter($site['dns_ids'] ?? [])),
                 'list_ids' => array_values(array_filter($site['list_ids'] ?? [])),
                 'filter_ids' => array_values(array_filter($site['filter_ids'] ?? [])),
@@ -125,9 +141,14 @@ class DnsFilter
         return [
             'online' => true,
             'rule' => $layer7Id !== null && $ruleIds !== [],
+            'active' => $dropping && collect($listed)->contains(fn (array $site) => $site['enabled']),
+            'packets' => $packets,
+            'bytes' => $bytes,
             'layer7_id' => $layer7Id !== '' ? $layer7Id : null,
             'regexp' => $regexp,
-            'rule_ids' => array_values(array_filter($ruleIds)),
+            'layer_comment' => $layerComment,
+            'rules' => $rules,
+            'rule_ids' => $ruleIds,
             'legacy_filter_ids' => array_values(array_filter($legacyFilterIds)),
             'nat_ids' => array_values(array_filter($natIds)),
             'sites' => $listed,
@@ -140,12 +161,22 @@ class DnsFilter
      */
     public function present(array $snapshot): array
     {
+        $enabled = array_values(array_filter(
+            $snapshot['sites'],
+            fn (array $site) => (bool) ($site['enabled'] ?? false),
+        ));
+
         return [
             'online' => $snapshot['online'],
             'rule' => $snapshot['rule'],
-            'regexp' => (string) ($snapshot['regexp'] ?? ''),
+            'active' => (bool) ($snapshot['active'] ?? false),
+            'packets' => (int) ($snapshot['packets'] ?? 0),
+            'bytes' => (int) ($snapshot['bytes'] ?? 0),
+            'sampled_at' => now()->toIso8601String(),
+            'regexp' => $enabled === [] ? '' : $this->compile(array_column($enabled, 'domain')),
             'sites' => array_map(fn (array $site) => [
                 'domain' => $site['domain'],
+                'enabled' => (bool) ($site['enabled'] ?? false),
                 'layer7' => (bool) ($site['layer7'] ?? false),
                 'firewall' => (bool) ($site['firewall'] ?? false),
             ], $snapshot['sites']),
@@ -164,39 +195,49 @@ class DnsFilter
             return 'Router tidak menjawab. Pastikan sesi ini sedang terhubung.';
         }
 
-        $domains = collect($current['sites'])->pluck('domain')->push($domain)->unique()->sort()->values()->all();
-        $regexp = $this->compile($domains);
-        $calls = [];
-        if ($current['layer7_id'] === null) {
-            $calls['layer7'] = ['method' => 'post', 'path' => 'ip/firewall/layer7-protocol/add', 'body' => [
-                'name' => self::LIST,
-                'regexp' => $regexp,
-                'comment' => self::RULE,
-            ]];
-        } elseif ($current['regexp'] !== $regexp) {
-            $calls['layer7'] = ['method' => 'post', 'path' => 'ip/firewall/layer7-protocol/set', 'body' => [
-                '.id' => $current['layer7_id'],
-                'regexp' => $regexp,
-            ]];
-        }
-        if ($current['rule_ids'] === []) {
-            $calls['rule'] = ['method' => 'post', 'path' => 'ip/firewall/filter/add', 'body' => [
-                'chain' => 'forward',
-                'action' => 'drop',
-                'protocol' => 'tcp',
-                'dst-port' => '80,443',
-                'layer7-protocol' => self::LIST,
-                'comment' => self::RULE,
-                'place-before' => '0',
-            ]];
-        }
-
-        $error = $this->send($session, $calls);
+        $active = collect($current['sites'])->where('enabled', true)->pluck('domain')->push($domain)->unique()->sort()->values()->all();
+        $paused = collect($current['sites'])->where('enabled', false)->pluck('domain')->reject(fn (string $listed) => $listed === $domain)->sort()->values()->all();
+        $error = $this->apply($session, $current, $active, $paused);
         if ($error !== null) {
             return $error;
         }
 
         return $this->send($session, $this->legacyCalls($current));
+    }
+
+    public function toggle(MikrotikSession $session, string $domain, bool $enabled): ?string
+    {
+        $domain = $this->hostname($domain);
+        if ($domain === null) {
+            return 'Domain tidak valid.';
+        }
+
+        $current = $this->read($session);
+        if (! $current['online']) {
+            return 'Router tidak menjawab. Pastikan sesi ini sedang terhubung.';
+        }
+
+        $site = collect($current['sites'])->firstWhere('domain', $domain);
+        if ($site === null) {
+            return 'Situs ini tidak ada di daftar.';
+        }
+
+        $active = collect($current['sites'])->where('enabled', true)->pluck('domain');
+        $paused = collect($current['sites'])->where('enabled', false)->pluck('domain');
+        if ($enabled) {
+            $active = $active->push($domain);
+            $paused = $paused->reject(fn (string $listed) => $listed === $domain);
+        } else {
+            $active = $active->reject(fn (string $listed) => $listed === $domain);
+            $paused = $paused->push($domain);
+        }
+
+        return $this->apply(
+            $session,
+            $current,
+            $active->unique()->sort()->values()->all(),
+            $paused->unique()->sort()->values()->all(),
+        );
     }
 
     public function unblock(MikrotikSession $session, string $domain): ?string
@@ -216,20 +257,21 @@ class DnsFilter
             return null;
         }
 
-        $domains = collect($current['sites'])->pluck('domain')->reject(fn (string $listed) => $listed === $domain)->sort()->values()->all();
+        $active = collect($current['sites'])->where('enabled', true)->pluck('domain')->reject(fn (string $listed) => $listed === $domain)->sort()->values()->all();
+        $paused = collect($current['sites'])->where('enabled', false)->pluck('domain')->reject(fn (string $listed) => $listed === $domain)->sort()->values()->all();
         $calls = [];
-        if ($domains === []) {
+        if ($active === [] && $paused === []) {
             if ($current['layer7_id'] !== null) {
                 $calls['layer7'] = ['method' => 'post', 'path' => 'ip/firewall/layer7-protocol/remove', 'body' => ['.id' => $current['layer7_id']]];
             }
             foreach ($current['rule_ids'] as $index => $id) {
                 $calls['rule'.$index] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $id]];
             }
-        } elseif ($current['layer7_id'] !== null) {
-            $calls['layer7'] = ['method' => 'post', 'path' => 'ip/firewall/layer7-protocol/set', 'body' => [
-                '.id' => $current['layer7_id'],
-                'regexp' => $this->compile($domains),
-            ]];
+        } else {
+            $error = $this->apply($session, $current, $active, $paused);
+            if ($error !== null) {
+                return $error;
+            }
         }
 
         foreach ($site['dns_ids'] as $index => $id) {
@@ -241,7 +283,7 @@ class DnsFilter
         foreach ($site['filter_ids'] as $index => $id) {
             $calls['filter'.$index] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $id]];
         }
-        if ($domains === []) {
+        if ($active === [] && $paused === []) {
             foreach ($current['legacy_filter_ids'] as $index => $id) {
                 $calls['legacy'.$index] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $id]];
             }
@@ -282,6 +324,58 @@ class DnsFilter
     }
 
     /**
+     * @param  array{layer7_id: string|null, regexp: string, layer_comment?: string, rules?: array<int, array{id: string, disabled: bool}>}  $current
+     * @param  array<int, string>  $active
+     * @param  array<int, string>  $paused
+     */
+    private function apply(MikrotikSession $session, array $current, array $active, array $paused): ?string
+    {
+        $active = array_values(array_filter($active, fn (string $domain) => $domain !== self::HOLD));
+        $paused = array_values(array_diff($paused, $active));
+        $regexp = $this->compile($active === [] ? [self::HOLD] : $active);
+        $comment = $this->note($paused);
+        $calls = [];
+        if ($current['layer7_id'] === null) {
+            $calls['layer7'] = ['method' => 'post', 'path' => 'ip/firewall/layer7-protocol/add', 'body' => [
+                'name' => self::LIST,
+                'regexp' => $regexp,
+                'comment' => $comment,
+            ]];
+        } elseif ($current['regexp'] !== $regexp || ($current['layer_comment'] ?? '') !== $comment) {
+            $calls['layer7'] = ['method' => 'post', 'path' => 'ip/firewall/layer7-protocol/set', 'body' => [
+                '.id' => $current['layer7_id'],
+                'regexp' => $regexp,
+                'comment' => $comment,
+            ]];
+        }
+
+        $wantOff = $active === [];
+        foreach ($current['rules'] ?? [] as $index => $rule) {
+            if (($rule['disabled'] ?? false) === $wantOff || ($rule['id'] ?? '') === '') {
+                continue;
+            }
+
+            $calls['state'.$index] = ['method' => 'post', 'path' => 'ip/firewall/filter/set', 'body' => [
+                '.id' => $rule['id'],
+                'disabled' => $wantOff ? 'yes' : 'no',
+            ]];
+        }
+        if (($current['rules'] ?? []) === [] && ! $wantOff) {
+            $calls['rule'] = ['method' => 'post', 'path' => 'ip/firewall/filter/add', 'body' => [
+                'chain' => 'forward',
+                'action' => 'drop',
+                'protocol' => 'tcp',
+                'dst-port' => '80,443',
+                'layer7-protocol' => self::LIST,
+                'comment' => self::RULE,
+                'place-before' => '0',
+            ]];
+        }
+
+        return $this->send($session, $calls);
+    }
+
+    /**
      * @param  array<int, string>  $domains
      */
     private function compile(array $domains): string
@@ -289,6 +383,38 @@ class DnsFilter
         $parts = array_map(fn (string $domain) => str_replace('.', '\\.', $domain), $domains);
 
         return '^.+('.implode('|', $parts).').*$';
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function paused(string $comment): array
+    {
+        $prefix = self::RULE.' off:';
+        if (! str_starts_with($comment, $prefix)) {
+            return [];
+        }
+
+        $domains = [];
+        foreach (explode(',', substr($comment, strlen($prefix))) as $part) {
+            $domain = $this->hostname($part);
+            if ($domain !== null) {
+                $domains[] = $domain;
+            }
+        }
+
+        return $domains;
+    }
+
+    /**
+     * @param  array<int, string>  $paused
+     */
+    private function note(array $paused): string
+    {
+        $paused = array_values(array_unique($paused));
+        sort($paused);
+
+        return $paused === [] ? self::RULE : self::RULE.' off:'.implode(',', $paused);
     }
 
     /**
@@ -303,7 +429,7 @@ class DnsFilter
         $domains = [];
         foreach (explode('|', $matches[1]) as $part) {
             $domain = $this->hostname(str_replace('\\.', '.', $part));
-            if ($domain !== null) {
+            if ($domain !== null && $domain !== self::HOLD) {
                 $domains[] = $domain;
             }
         }
@@ -330,8 +456,13 @@ class DnsFilter
         return [
             'online' => false,
             'rule' => false,
+            'active' => false,
+            'packets' => 0,
+            'bytes' => 0,
             'layer7_id' => null,
             'regexp' => '',
+            'layer_comment' => '',
+            'rules' => [],
             'rule_ids' => [],
             'legacy_filter_ids' => [],
             'nat_ids' => [],

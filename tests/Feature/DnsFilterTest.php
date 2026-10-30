@@ -86,6 +86,69 @@ class DnsFilterTest extends TestCase
             || str_ends_with($request->url(), '/ip/firewall/layer7-protocol/add'));
     }
 
+    public function test_disabling_a_site_takes_it_out_of_the_regexp(): void
+    {
+        $session = $this->router();
+        Http::fake(function ($request) {
+            $path = parse_url($request->url(), PHP_URL_PATH) ?: '';
+
+            $body = match (true) {
+                $request->method() === 'GET' && str_ends_with($path, '/ip/firewall/layer7-protocol') => [
+                    ['.id' => '*L1', 'name' => 'streamnet-block', 'regexp' => '^.+(amazon\\.com).*$', 'comment' => 'StreamNet'],
+                ],
+                $request->method() === 'GET' && str_ends_with($path, '/ip/firewall/filter') => [
+                    ['.id' => '*R1', 'chain' => 'forward', 'action' => 'drop', 'protocol' => 'tcp', 'dst-port' => '80,443', 'layer7-protocol' => 'streamnet-block', 'comment' => 'StreamNet', 'packets' => '40', 'bytes' => '8000'],
+                ],
+                default => [],
+            };
+
+            return Http::response($body);
+        });
+
+        $filter = app(DnsFilter::class);
+        $snapshot = $filter->present($filter->read($session));
+        $this->assertTrue($snapshot['active']);
+        $this->assertSame(40, $snapshot['packets']);
+        $this->assertSame(8000, $snapshot['bytes']);
+        $this->assertTrue($snapshot['sites'][0]['enabled']);
+
+        $this->assertNull($filter->toggle($session, 'amazon.com', false));
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/layer7-protocol/set')
+            && ($request['regexp'] ?? null) === '^.+(streamnet-hold\\.invalid).*$'
+            && ($request['comment'] ?? null) === 'StreamNet off:amazon.com');
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/filter/set')
+            && ($request['.id'] ?? null) === '*R1'
+            && ($request['disabled'] ?? null) === 'yes');
+    }
+
+    public function test_a_paused_site_stays_out_of_the_regexp_when_another_site_is_added(): void
+    {
+        $session = $this->router();
+        Http::fake(function ($request) {
+            $path = parse_url($request->url(), PHP_URL_PATH) ?: '';
+
+            $body = match (true) {
+                $request->method() === 'GET' && str_ends_with($path, '/ip/firewall/layer7-protocol') => [
+                    ['.id' => '*L1', 'name' => 'streamnet-block', 'regexp' => '^.+(streamnet-hold\\.invalid).*$', 'comment' => 'StreamNet off:amazon.com'],
+                ],
+                $request->method() === 'GET' && str_ends_with($path, '/ip/firewall/filter') => [
+                    ['.id' => '*R1', 'chain' => 'forward', 'action' => 'drop', 'layer7-protocol' => 'streamnet-block', 'comment' => 'StreamNet', 'disabled' => 'true'],
+                ],
+                default => [],
+            };
+
+            return Http::response($body);
+        });
+
+        $this->assertNull(app(DnsFilter::class)->block($session, 'facebook.com'));
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/layer7-protocol/set')
+            && ($request['regexp'] ?? null) === '^.+(facebook\\.com).*$'
+            && ($request['comment'] ?? null) === 'StreamNet off:amazon.com');
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/filter/set')
+            && ($request['.id'] ?? null) === '*R1'
+            && ($request['disabled'] ?? null) === 'no');
+    }
+
     public function test_unblocking_removes_the_protocol_when_it_was_the_last_site(): void
     {
         $session = $this->router();

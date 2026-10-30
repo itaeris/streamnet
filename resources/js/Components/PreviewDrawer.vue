@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import LiveRate from './LiveRate.vue';
+import ToggleSwitch from './ToggleSwitch.vue';
 import TrafficChart from './TrafficChart.vue';
 import { live } from '../composables/useBoardTime';
 import { useLeaseAlias } from '../composables/useLeaseAlias';
@@ -234,6 +235,10 @@ onBeforeUnmount(() => {
                     </div>
                 </section>
 
+                <section v-if="panel.switch && active?.hero" class="rounded-xl border border-edge bg-menu px-3 py-3">
+                    <ToggleSwitch :model-value="panel.switch.on" :label="panel.switch.label" :hint="panel.switch.hint" @update:model-value="panel.switch.run" />
+                </section>
+
                 <section v-if="panel.alias && active?.id === 'overview'" class="rounded-xl border border-edge bg-menu px-3 py-3">
                     <p class="text-[11px] text-mute">Alias</p>
                     <div v-if="panel.alias.value && !editingAlias" class="group mt-1 flex items-center justify-between gap-2">
@@ -272,8 +277,8 @@ onBeforeUnmount(() => {
                         <p class="font-mono text-[10px] text-mute">{{ live ? 'Live' : '5 menit' }}</p>
                     </div>
                     <div class="mt-2 flex items-end justify-between gap-3">
-                        <p class="font-mono text-sm text-cyan">↓ RX <LiveRate :key="`${panel.key}-rx`" :value="panel.stream.rx" /></p>
-                        <p class="font-mono text-sm text-ok">↑ TX <LiveRate :key="`${panel.key}-tx`" :value="panel.stream.tx" /></p>
+                        <p class="font-mono text-sm text-cyan">{{ panel.stream.rxLabel || '↓ RX' }} <LiveRate :key="`${panel.key}-rx`" :value="panel.stream.rx" /></p>
+                        <p v-if="panel.stream.txLabel !== ''" class="font-mono text-sm text-ok">{{ panel.stream.txLabel || '↑ TX' }} <LiveRate :key="`${panel.key}-tx`" :value="panel.stream.tx" /></p>
                     </div>
                     <TrafficChart :key="panel.key" class="mt-2" :points="series" axis height-class="h-32" />
                     <p v-if="panel.stream.flows != null" class="mt-1 font-mono text-[10px] text-mute">{{ panel.stream.flows }} koneksi aktif</p>
