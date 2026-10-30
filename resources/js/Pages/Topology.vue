@@ -103,8 +103,34 @@ function portLoad(row) {
 }
 
 const pan = ref({ x: 0, y: 0 });
+const zoom = ref(1);
 const dragging = ref(false);
+const viewportEl = ref(null);
+const mapEl = ref(null);
 let grab = { x: 0, y: 0 };
+
+function onWheel(event) {
+    const viewport = viewportEl.value;
+    const map = mapEl.value;
+    if (!viewport || !map) {
+        return;
+    }
+
+    const line = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.clientHeight : 1;
+    const next = Math.min(2.5, Math.max(0.4, zoom.value * Math.exp(-event.deltaY * line * 0.0015)));
+    const ratio = next / zoom.value;
+    const bounds = viewport.getBoundingClientRect();
+    const originX = map.offsetLeft + map.offsetWidth / 2;
+    const originY = map.offsetTop + map.offsetHeight / 2;
+    const pointerX = event.clientX - bounds.left;
+    const pointerY = event.clientY - bounds.top;
+
+    pan.value = {
+        x: (pointerX - originX) * (1 - ratio) + pan.value.x * ratio,
+        y: (pointerY - originY) * (1 - ratio) + pan.value.y * ratio,
+    };
+    zoom.value = next;
+}
 
 function onPointerDown(event) {
     if (event.button !== 0 || event.target.closest('a, button')) {
@@ -144,14 +170,16 @@ function onPointerUp() {
         <div class="topo-grid pointer-events-none absolute inset-0" />
 
         <div
+            ref="viewportEl"
             class="viewport"
             :class="dragging ? 'is-dragging' : ''"
             @pointerdown="onPointerDown"
             @pointermove="onPointerMove"
             @pointerup="onPointerUp"
             @pointercancel="onPointerUp"
+            @wheel.prevent="onWheel"
         >
-            <div class="map flex flex-col items-center" :style="{ transform: `translate(${pan.x}px, ${pan.y}px)` }">
+            <div ref="mapEl" class="map flex flex-col items-center" :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }">
                 <article class="topo-node">
                     <span class="topo-icon bg-cyan-2 text-[#003640]">
                         <Icon class="text-[18px]" name="language" />
@@ -389,6 +417,7 @@ function onPointerUp() {
 }
 
 .viewport {
+    position: relative;
     display: flex;
     min-height: 0;
     flex: 1 1 auto;
