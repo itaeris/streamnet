@@ -186,6 +186,86 @@ class AnalyticsQuery
     }
 
     /**
+     * Apps opened most often in the chart window.
+     *
+     * @return array<int, array{name: string, site: string|null, users: int, queries: int}>
+     */
+    public function dnsApps(?int $sessionId, Carbon $start, Carbon $end, int $limit = 8): array
+    {
+        if ($sessionId === null) {
+            return [];
+        }
+
+        $sites = app(DnsActivity::class);
+        $rows = DnsQuery::query()
+            ->where('mikrotik_session_id', $sessionId)
+            ->whereBetween('logged_at', [$start, $end])
+            ->where('app', '!=', '')
+            ->select('app')
+            ->selectRaw('COUNT(*) as queries')
+            ->selectRaw('COUNT(DISTINCT address) as users')
+            ->groupBy('app')
+            ->orderByDesc('users')
+            ->orderByDesc('queries')
+            ->limit($limit)
+            ->get();
+
+        return $rows->map(fn (object $row) => [
+            'name' => (string) $row->app,
+            'site' => $sites->website((string) $row->app),
+            'users' => (int) $row->users,
+            'queries' => (int) $row->queries,
+        ])->all();
+    }
+
+    /**
+     * Clients that hit the bandwidth policy, busiest first.
+     *
+     * @return array<int, array{name: string, address: string|null, count: int, peak: int|null}>
+     */
+    public function bandwidthClients(?int $sessionId, Carbon $start, Carbon $end, int $limit = 8): array
+    {
+        if ($sessionId === null) {
+            return [];
+        }
+
+        $groups = [];
+        $events = SecurityEvent::query()
+            ->where('mikrotik_session_id', $sessionId)
+            ->where('category', 'bandwidth')
+            ->whereBetween('occurred_at', [$start, $end])
+            ->orderByDesc('occurred_at')
+            ->limit(2000)
+            ->get(['detail', 'context']);
+
+        foreach ($events as $event) {
+            $client = is_array($event->context['client'] ?? null) ? $event->context['client'] : [];
+            $detail = (string) $event->detail;
+            preg_match('/\(([\d.]+)\)/', $detail, $address);
+            preg_match('/(?:download|upload)\s+([\d.]+)\s*Mbps/i', $detail, $rate);
+            $key = (string) ($client['address'] ?? ($address[1] ?? ''));
+            if ($key === '') {
+                $key = (string) ($client['name'] ?? $detail);
+            }
+            $direction = ($client['direction'] ?? null) === 'up' || str_contains(strtolower($detail), 'upload') ? 'up' : 'down';
+            $peak = isset($client[$direction]) ? (int) $client[$direction] : (isset($rate[1]) ? (int) round((float) $rate[1] * 1_000_000) : null);
+            $group = $groups[$key] ?? [
+                'name' => (string) ($client['name'] ?? (trim(strstr($detail, ' (', true) ?: '') ?: $key)),
+                'address' => $client['address'] ?? ($address[1] ?? null),
+                'count' => 0,
+                'peak' => null,
+            ];
+            $group['count']++;
+            if ($peak !== null && ($group['peak'] === null || $peak > $group['peak'])) {
+                $group['peak'] = $peak;
+            }
+            $groups[$key] = $group;
+        }
+
+        return collect($groups)->sortByDesc('count')->take($limit)->values()->all();
+    }
+
+    /**
      * Latest queries from one client.
      *
      * @return array<int, array<string, mixed>>

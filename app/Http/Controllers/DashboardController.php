@@ -31,6 +31,8 @@ class DashboardController extends Controller
             ],
             'logs' => fn () => $analytics->recentLogs($session?->id, $window['start'], $window['end'], 8),
             'events' => fn () => $analytics->recentEvents($session?->id, $window['start'], $window['end'], 5),
+            'apps' => fn () => $analytics->dnsApps($session?->id, $window['chart_start'], $window['end']),
+            'policy' => fn () => $analytics->bandwidthClients($session?->id, $window['chart_start'], $window['end']),
         ]);
     }
 

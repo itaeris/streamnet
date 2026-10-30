@@ -1,13 +1,14 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../Layouts/AppLayout.vue';
 import PulseWatch from '../Components/PulseWatch.vue';
 import PagedTable from '../Components/PagedTable.vue';
 import PreviewBinder from '../Components/PreviewBinder.vue';
+import SiteMark from '../Components/SiteMark.vue';
 import LiveRate from '../Components/LiveRate.vue';
 import TrafficChart from '../Components/TrafficChart.vue';
-import { live as boardLive, liveSpans, pinned, ranges, refreshId } from '../composables/useBoardTime';
+import { live as boardLive, liveSpans, pinned, ranges, refreshId, withSite } from '../composables/useBoardTime';
 import { useBoardPulse } from '../composables/usePulse';
 import { usePreview } from '../composables/usePreview';
 import { clockMillis, durationSeconds, formatBytes, formatRate, formatUptime, percent } from '../lib/format';
@@ -24,7 +25,12 @@ const props = defineProps({
     bridge: { type: Object, default: () => ({ name: null, series: [] }) },
     logs: { type: Array, default: () => [] },
     events: { type: Array, default: () => [] },
+    apps: { type: Array, default: () => [] },
+    policy: { type: Array, default: () => [] },
 });
+
+const page = usePage();
+const siteHref = (path) => withSite(path, page.props.currentSessionSlug || '');
 
 const live = useBoardPulse();
 const query = '';
@@ -231,6 +237,18 @@ const healthLabel = (live) => {
 const ifaceText = (iface) => `${iface.name} ${iface.type}`;
 const ifaceLabel = (iface) => iface.name || '';
 
+function bars(rows, valueOf) {
+    const max = Math.max(1, ...rows.map((row) => valueOf(row)));
+
+    return rows.map((row) => ({
+        ...row,
+        width: `${Math.max(8, Math.round((valueOf(row) / max) * 100))}%`,
+    }));
+}
+
+const appBars = computed(() => bars(props.apps ?? [], (row) => Number(row.users) || 0));
+const policyBars = computed(() => bars(props.policy ?? [], (row) => Number(row.count) || 0));
+
 const visibleIfaces = (live, query) => {
     const needle = String(query || '').trim().toLowerCase();
     const rows = live?.interfaces ?? [];
@@ -423,6 +441,61 @@ const visibleIfaces = (live, query) => {
                     </ul>
                 </article>
             </div>
+        </section>
+
+        <section class="mt-3 grid gap-3 xl:grid-cols-2">
+            <article class="noc-card p-3">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-[15px] font-semibold">DNS & Apps</p>
+                        <p class="font-mono text-[11px] text-mute">{{ rangeLabel }} · paling sering dibuka</p>
+                    </div>
+                    <Link :href="siteHref('/dns')" class="font-mono text-[11px] text-cyan">Buka</Link>
+                </div>
+                <ul v-if="appBars.length" class="mt-3 space-y-3">
+                    <li v-for="app in appBars" :key="app.name">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="flex min-w-0 items-center gap-2">
+                                <SiteMark :domain="app.site || ''" :label="app.name" />
+                                <span class="min-w-0">
+                                    <span class="block truncate text-sm font-medium">{{ app.name }}</span>
+                                    <span class="block font-mono text-[10px] text-mute">{{ Number(app.queries).toLocaleString('id-ID') }} query</span>
+                                </span>
+                            </span>
+                            <span class="shrink-0 font-mono text-[11px] text-mist">{{ app.users }} pengguna</span>
+                        </div>
+                        <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-tile">
+                            <div class="h-full rounded-full bg-cyan" :style="{ width: app.width }" />
+                        </div>
+                    </li>
+                </ul>
+                <p v-else class="mt-3 font-mono text-[11px] text-mute">Belum ada aplikasi pada rentang ini.</p>
+            </article>
+
+            <article class="noc-card p-3">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-[15px] font-semibold">Bandwidth Policy</p>
+                        <p class="font-mono text-[11px] text-mute">{{ rangeLabel }} · klien yang menyentuh batas</p>
+                    </div>
+                    <Link :href="siteHref('/bandwidth-policy')" class="font-mono text-[11px] text-cyan">Buka</Link>
+                </div>
+                <ul v-if="policyBars.length" class="mt-3 space-y-3">
+                    <li v-for="client in policyBars" :key="client.address || client.name">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="min-w-0">
+                                <span class="block truncate text-sm font-medium">{{ client.name }}</span>
+                                <span class="block truncate font-mono text-[10px] text-mute">{{ client.address || '–' }}<template v-if="client.peak"> · puncak {{ formatRate(client.peak) }}</template></span>
+                            </span>
+                            <span class="shrink-0 font-mono text-[11px] text-warn">{{ client.count }} kali</span>
+                        </div>
+                        <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-tile">
+                            <div class="h-full rounded-full bg-warn" :style="{ width: client.width }" />
+                        </div>
+                    </li>
+                </ul>
+                <p v-else class="mt-3 font-mono text-[11px] text-mute">Belum ada klien yang menyentuh batas.</p>
+            </article>
         </section>
 
         <section class="noc-card mt-3 overflow-x-auto">

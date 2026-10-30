@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\DhcpLease;
+use App\Models\DnsQuery;
 use App\Models\InterfaceSample;
 use App\Models\MikrotikSession;
 use App\Models\RouterLog;
@@ -248,5 +249,90 @@ class TimeWindowTest extends TestCase
         $this->assertCount(2, $series);
         $this->assertSame(1000, $series[0]['rx']);
         $this->assertSame(3000, $series[1]['rx']);
+    }
+
+    public function test_overview_charts_follow_the_selected_span(): void
+    {
+        $user = User::factory()->create();
+        $session = MikrotikSession::query()->create([
+            'name' => 'Utama',
+            'host' => '10.10.10.1',
+            'scheme' => 'http',
+            'username' => 'wiki',
+            'password' => 'secret',
+            'enabled' => true,
+        ]);
+        $this->session(['mikrotik_session_id' => $session->id]);
+
+        foreach ([
+            ['*1', '10.10.10.10', 'youtube.com', 'YouTube', now()->subHour()],
+            ['*2', '10.10.10.11', 'youtube.com', 'YouTube', now()->subHour()],
+            ['*3', '10.10.10.10', 'google.com', 'Google', now()->subMinutes(30)],
+            ['*4', '10.10.10.12', 'netflix.com', 'Netflix', now()->subDays(3)],
+        ] as [$id, $address, $domain, $app, $at]) {
+            DnsQuery::query()->create([
+                'mikrotik_session_id' => $session->id,
+                'router_id' => $id,
+                'logged_at' => $at,
+                'address' => $address,
+                'domain' => $domain,
+                'qtype' => 'A',
+                'app' => $app,
+            ]);
+        }
+
+        SecurityEvent::query()->create([
+            'mikrotik_session_id' => $session->id,
+            'occurred_at' => now()->subMinutes(20),
+            'severity' => 'info',
+            'category' => 'bandwidth',
+            'title' => 'Klien menyentuh batas bandwidth',
+            'detail' => 'Nita (10.10.10.139) download 50.1 Mbps · 17% kapasitas',
+            'context' => ['client' => ['name' => 'Nita', 'address' => '10.10.10.139', 'direction' => 'down', 'down' => 50_100_000]],
+        ]);
+        SecurityEvent::query()->create([
+            'mikrotik_session_id' => $session->id,
+            'occurred_at' => now()->subMinutes(40),
+            'severity' => 'info',
+            'category' => 'bandwidth',
+            'title' => 'Klien menyentuh batas bandwidth',
+            'detail' => 'Nita (10.10.10.139) download 40.0 Mbps · 13% kapasitas',
+            'context' => ['client' => ['name' => 'Nita', 'address' => '10.10.10.139', 'direction' => 'down', 'down' => 40_000_000]],
+        ]);
+        SecurityEvent::query()->create([
+            'mikrotik_session_id' => $session->id,
+            'occurred_at' => now()->subDays(10),
+            'severity' => 'info',
+            'category' => 'bandwidth',
+            'title' => 'Klien menyentuh batas bandwidth',
+            'detail' => 'Lama (10.10.10.50) download 20.0 Mbps',
+            'context' => ['client' => ['name' => 'Lama', 'address' => '10.10.10.50', 'direction' => 'down', 'down' => 20_000_000]],
+        ]);
+
+        $this->actingAs($user)
+            ->get('/utama?live=1&span=1440')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('apps.0.name', 'YouTube')
+                ->where('apps.0.users', 2)
+                ->where('apps.0.queries', 2)
+                ->where('apps.0.site', 'youtube.com')
+                ->has('apps', 2)
+                ->where('policy.0.name', 'Nita')
+                ->where('policy.0.count', 2)
+                ->where('policy.0.peak', 50100000)
+                ->has('policy', 1));
+
+        $this->actingAs($user)
+            ->get('/utama?live=1&span=10080')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('apps', 3)
+                ->has('policy', 1));
+
+        $this->actingAs($user)
+            ->get('/utama?live=1&span=43200')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->has('policy', 2));
     }
 }
