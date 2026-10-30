@@ -20,6 +20,8 @@ const profileOpen = ref(false);
 const profileRoot = ref(null);
 const routerOpen = ref(false);
 const routerRoot = ref(null);
+const securityOpen = ref(false);
+const securityRoot = ref(null);
 const sessions = computed(() => page.props.sessions ?? []);
 const currentSession = computed(() => sessions.value.find((item) => item.id === page.props.currentSessionId) ?? null);
 
@@ -57,6 +59,11 @@ function closeMenus(event) {
     if (!routerRoot.value?.contains(event.target)) {
         routerOpen.value = false;
     }
+
+    const security = Array.isArray(securityRoot.value) ? securityRoot.value[0] : securityRoot.value;
+    if (collapsed.value && security && !security.contains(event.target)) {
+        securityOpen.value = false;
+    }
 }
 
 const links = [
@@ -68,8 +75,14 @@ const links = [
     { href: '/access-points', label: 'Access Points', icon: 'wifi' },
     { href: '/topology', label: 'Topology Map', icon: 'lan' },
     { href: '/bandwidth-policy', label: 'Bandwidth Policy', icon: 'gauge' },
-    { href: '/security', label: 'Firewall & Security', icon: 'shield' },
-    { href: '/agent', label: 'Agen Trafik', icon: 'search' },
+    {
+        href: '/security',
+        label: 'Firewall & Security',
+        icon: 'shield',
+        children: [
+            { href: '/agent', label: 'Agen Trafik' },
+        ],
+    },
     { href: '/logs', label: 'Log Stream', icon: 'receipt_long' },
 ];
 
@@ -90,6 +103,14 @@ const titles = {
     '/pengaturan/unifi': 'Pengaturan',
     '/pengaturan/pengguna': 'Pengaturan',
 };
+
+const mobileLinks = computed(() => links.flatMap((link) => [link, ...(link.children ?? [])]));
+
+watch(current, (path) => {
+    if (path === '/security' || path === '/agent') {
+        securityOpen.value = true;
+    }
+}, { immediate: true });
 
 const { pulse, connected } = usePulse(() => page.props.pulse ?? null);
 provide(pulseKey, pulse);
@@ -311,7 +332,7 @@ const dotClass = computed(() => {
             </div>
             <nav class="flex gap-1 overflow-x-auto px-3 pb-2 lg:hidden">
                 <Link
-                    v-for="link in links"
+                    v-for="link in mobileLinks"
                     :key="link.href"
                     :href="hrefFor(link.href)"
                     class="shrink-0 rounded-md px-2.5 py-1.5 text-xs"
@@ -384,17 +405,61 @@ const dotClass = computed(() => {
             <div class="mt-5 px-3">
                 <p v-if="!collapsed" class="px-2 text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Telemetry navigation</p>
                 <nav class="mt-2 flex flex-col gap-1">
-                    <Link
-                        v-for="link in links"
-                        :key="link.href"
-                        :href="hrefFor(link.href)"
-                        class="flex items-center gap-2.5 rounded-lg py-2 text-[13px] transition"
-                        :class="[collapsed ? 'justify-center px-0' : 'px-3', current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper']"
-                        v-tip:right="collapsed ? link.label : ''"
-                    >
-                        <Icon class="text-[18px]" :name="link.icon" />
-                        <span v-if="!collapsed">{{ link.label }}</span>
-                    </Link>
+                    <template v-for="link in links" :key="link.href">
+                        <div v-if="link.children" ref="securityRoot" class="relative">
+                            <template v-if="collapsed">
+                                <button
+                                    type="button"
+                                    class="flex w-full cursor-pointer items-center justify-center rounded-lg py-2 text-[13px] transition"
+                                    :class="current === link.href || link.children.some((child) => current === child.href) ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper'"
+                                    v-tip:right="link.label"
+                                    @click="securityOpen = !securityOpen"
+                                >
+                                    <Icon class="text-[18px]" :name="link.icon" />
+                                </button>
+                                <MenuPanel :open="securityOpen" class="absolute top-0 left-full z-50 ml-2 w-52 origin-top-left rounded-lg bg-menu p-1 shadow-md ring-1 ring-edge">
+                                    <Link :href="hrefFor(link.href)" class="block rounded-lg px-3 py-2 text-[13px]" :class="current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper'" @click="securityOpen = false">{{ link.label }}</Link>
+                                    <Link v-for="child in link.children" :key="child.href" :href="hrefFor(child.href)" class="block rounded-lg px-3 py-2 text-[13px]" :class="current === child.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper'" @click="securityOpen = false">{{ child.label }}</Link>
+                                </MenuPanel>
+                            </template>
+                            <template v-else>
+                                <div class="flex items-center gap-1">
+                                    <Link
+                                        :href="hrefFor(link.href)"
+                                        class="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition"
+                                        :class="current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper'"
+                                    >
+                                        <Icon class="text-[18px]" :name="link.icon" />
+                                        <span class="truncate">{{ link.label }}</span>
+                                    </Link>
+                                    <button type="button" class="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-mute hover:bg-tile hover:text-paper" @click="securityOpen = !securityOpen">
+                                        <Icon class="text-[18px] transition-transform duration-200" :class="securityOpen ? 'rotate-180' : ''" name="expand_more" />
+                                    </button>
+                                </div>
+                                <div v-show="securityOpen" class="mt-1 flex flex-col gap-1 pl-9">
+                                    <Link
+                                        v-for="child in link.children"
+                                        :key="child.href"
+                                        :href="hrefFor(child.href)"
+                                        class="rounded-lg px-3 py-2 text-[13px] transition"
+                                        :class="current === child.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper'"
+                                    >
+                                        {{ child.label }}
+                                    </Link>
+                                </div>
+                            </template>
+                        </div>
+                        <Link
+                            v-else
+                            :href="hrefFor(link.href)"
+                            class="flex items-center gap-2.5 rounded-lg py-2 text-[13px] transition"
+                            :class="[collapsed ? 'justify-center px-0' : 'px-3', current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper']"
+                            v-tip:right="collapsed ? link.label : ''"
+                        >
+                            <Icon class="text-[18px]" :name="link.icon" />
+                            <span v-if="!collapsed">{{ link.label }}</span>
+                        </Link>
+                    </template>
                 </nav>
             </div>
 
