@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import {
     Activity,
     Antenna,
+    Ban,
     ArrowDown,
     ArrowRight,
     ArrowUp,
@@ -84,6 +85,7 @@ const icons = {
     fair_share: Scale,
     gauge: Gauge,
     burst: Zap,
+    block: Ban,
     history: History,
     hub: Waypoints,
     info: Info,

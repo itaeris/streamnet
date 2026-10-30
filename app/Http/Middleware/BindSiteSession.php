@@ -52,6 +52,7 @@ class BindSiteSession
             'bandwidth',
             'dhcp',
             'dns',
+            'dns-filter',
             'logs',
             'security',
             'access-points',

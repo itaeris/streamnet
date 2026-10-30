@@ -47,7 +47,7 @@ class MikrotikSession extends Model
     {
         $reserved = [
             'sesi', 'baru', 'login', 'logout', 'pengaturan', 'up',
-            'bandwidth', 'dhcp', 'dns', 'logs', 'security',
+            'bandwidth', 'dhcp', 'dns', 'dns-filter', 'logs', 'security',
             'access-points', 'bandwidth-policy', 'topology',
         ];
         $base = Str::slug($name) ?: 'sesi';

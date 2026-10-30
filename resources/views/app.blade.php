@@ -14,7 +14,7 @@
 
                 var boardLive = localStorage.getItem('board.live') !== '0';
                 document.cookie = 'board_live=' + (boardLive ? '1' : '0') + ';path=/;max-age=31536000;SameSite=Lax';
-                var boardPaths = { '/': 1, '/bandwidth': 1, '/dhcp': 1, '/dns': 1, '/logs': 1, '/security': 1, '/topology': 1, '/pengaturan': 1, '/pengaturan/sesi': 1, '/pengaturan/unifi': 1, '/pengaturan/pengguna': 1 };
+                var boardPaths = { '/': 1, '/bandwidth': 1, '/dhcp': 1, '/dns': 1, '/dns-filter': 1, '/logs': 1, '/security': 1, '/topology': 1, '/pengaturan': 1, '/pengaturan/sesi': 1, '/pengaturan/unifi': 1, '/pengaturan/pengguna': 1 };
                 var parts = location.pathname.split('/').filter(Boolean);
                 var rest = parts.length <= 1 ? '/' : '/' + parts.slice(1).join('/');
                 var onBoard = boardPaths[location.pathname] || (parts[0] && parts[0] !== 'sesi' && parts[0] !== 'login' && boardPaths[rest]);

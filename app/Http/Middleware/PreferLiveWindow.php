@@ -31,6 +31,7 @@ class PreferLiveWindow
             'bandwidth',
             'dhcp',
             'dns',
+            'dns-filter',
             'logs',
             'security',
             'topology',
@@ -51,6 +52,6 @@ class PreferLiveWindow
 
         $rest = trim(substr($path, strlen($site)), '/');
 
-        return $rest === '' || in_array($rest, ['bandwidth', 'dhcp', 'dns', 'logs', 'security', 'topology'], true);
+        return $rest === '' || in_array($rest, ['bandwidth', 'dhcp', 'dns', 'dns-filter', 'logs', 'security', 'topology'], true);
     }
 }

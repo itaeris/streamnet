@@ -13,7 +13,7 @@ export const ranges = [
     { minutes: 2880, label: 'Last 2 days' },
 ];
 
-export const boardPaths = ['/', '/bandwidth', '/dhcp', '/dns', '/logs', '/security', '/topology', '/pengaturan', '/pengaturan/sesi', '/pengaturan/unifi', '/pengaturan/pengguna'];
+export const boardPaths = ['/', '/bandwidth', '/dhcp', '/dns', '/dns-filter', '/logs', '/security', '/topology', '/pengaturan', '/pengaturan/sesi', '/pengaturan/unifi', '/pengaturan/pengguna'];
 
 export function barePath(url, slug = '') {
     const path = String(url || '').split('?')[0] || '/';
@@ -87,6 +87,7 @@ const liveProps = {
     '/bandwidth': [],
     '/dhcp': [],
     '/dns': ['queries'],
+    '/dns-filter': [],
     '/access-points': ['unifi'],
     '/topology': ['unifi'],
     '/bandwidth-policy': ['incidents'],

@@ -7,6 +7,7 @@ use App\Http\Controllers\BandwidthPolicyController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DhcpController;
 use App\Http\Controllers\DnsController;
+use App\Http\Controllers\DnsFilterController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\MikrotikSessionController;
 use App\Http\Controllers\SecurityController;
@@ -38,6 +39,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/dhcp/alias', [DhcpController::class, 'updateComment'])->name('dhcp.alias');
     Route::get('/dns', DnsController::class);
     Route::get('/dns/logo', SiteLogoController::class)->middleware('throttle:120,1');
+    Route::get('/dns-filter', [DnsFilterController::class, 'index']);
+    Route::post('/dns-filter', [DnsFilterController::class, 'store'])->name('dns-filter.store');
+    Route::delete('/dns-filter', [DnsFilterController::class, 'destroy'])->name('dns-filter.destroy');
     Route::get('/access-points', AccessPointController::class);
     Route::get('/topology', TopologyController::class);
     Route::get('/bandwidth-policy', [BandwidthPolicyController::class, 'index']);
@@ -72,6 +76,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/bandwidth', BandwidthController::class)->name('bandwidth');
         Route::get('/dhcp', DhcpController::class)->name('dhcp');
         Route::get('/dns', DnsController::class)->name('dns');
+        Route::get('/dns-filter', [DnsFilterController::class, 'index'])->name('dns-filter');
         Route::get('/access-points', AccessPointController::class)->name('access-points');
         Route::get('/topology', TopologyController::class)->name('topology');
         Route::get('/bandwidth-policy', [BandwidthPolicyController::class, 'index'])->name('bandwidth-policy');
