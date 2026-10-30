@@ -116,6 +116,10 @@ class RouterOsApi
                 continue;
             }
 
+            if ($tag === '!empty') {
+                continue;
+            }
+
             if ($tag === '!trap') {
                 $trap = $attributes['message'] ?? 'Permintaan API ditolak.';
 

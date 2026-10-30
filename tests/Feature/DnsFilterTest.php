@@ -37,7 +37,7 @@ class DnsFilterTest extends TestCase
             ->assertInertia(fn ($page) => $page->component('DnsFilter', false));
     }
 
-    public function test_blocking_writes_dns_nxdomain_and_a_firewall_drop(): void
+    public function test_blocking_puts_the_site_in_the_layer7_regexp(): void
     {
         $session = $this->router();
         Http::fake(fn () => Http::response([]));
@@ -45,49 +45,69 @@ class DnsFilterTest extends TestCase
         $error = app(DnsFilter::class)->block($session, 'https://www.facebook.com/watch');
 
         $this->assertNull($error);
-        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/dns/static/add')
-            && ($request['name'] ?? null) === 'facebook.com'
-            && ($request['type'] ?? null) === 'NXDOMAIN'
-            && ($request['comment'] ?? null) === 'StreamNet:facebook.com');
-        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/dns/static/add')
-            && ($request['regexp'] ?? null) === '.*\\.facebook\\.com$'
-            && ($request['type'] ?? null) === 'NXDOMAIN');
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/layer7-protocol/add')
+            && ($request['name'] ?? null) === 'streamnet-block'
+            && ($request['regexp'] ?? null) === '^.+(facebook\\.com).*$'
+            && ($request['comment'] ?? null) === 'StreamNet');
         Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/filter/add')
-            && ($request['tls-host'] ?? null) === 'facebook.com'
-            && ($request['dst-port'] ?? null) === '443'
+            && ($request['layer7-protocol'] ?? null) === 'streamnet-block'
+            && ($request['action'] ?? null) === 'drop'
+            && ($request['protocol'] ?? null) === 'tcp'
+            && ($request['dst-port'] ?? null) === '80,443'
             && ($request['place-before'] ?? null) === '0');
-        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/filter/add')
-            && ($request['tls-host'] ?? null) === '*.facebook.com');
-        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/filter/add')
-            && ($request['protocol'] ?? null) === 'udp'
-            && ($request['dst-port'] ?? null) === '443');
-        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/nat/add')
-            && ($request['action'] ?? null) === 'redirect'
-            && ($request['protocol'] ?? null) === 'udp'
-            && ($request['dst-port'] ?? null) === '53');
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/ip/dns/static/add')
+            || ($request['tls-host'] ?? null) !== null);
     }
 
-    public function test_unblocking_removes_the_entries_and_the_rule(): void
+    public function test_a_second_site_is_added_to_the_same_regexp(): void
     {
         $session = $this->router();
         Http::fake(function ($request) {
             $path = parse_url($request->url(), PHP_URL_PATH) ?: '';
 
             $body = match (true) {
+                $request->method() === 'GET' && str_ends_with($path, '/ip/firewall/layer7-protocol') => [
+                    ['.id' => '*L1', 'name' => 'streamnet-block', 'regexp' => '^.+(amazon\\.com).*$', 'comment' => 'StreamNet'],
+                ],
+                $request->method() === 'GET' && str_ends_with($path, '/ip/firewall/filter') => [
+                    ['.id' => '*R1', 'chain' => 'forward', 'action' => 'drop', 'protocol' => 'tcp', 'dst-port' => '80,443', 'layer7-protocol' => 'streamnet-block', 'comment' => 'StreamNet'],
+                ],
+                default => [],
+            };
+
+            return Http::response($body);
+        });
+
+        $this->assertNull(app(DnsFilter::class)->block($session, 'facebook.com'));
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/layer7-protocol/set')
+            && ($request['.id'] ?? null) === '*L1'
+            && ($request['regexp'] ?? null) === '^.+(amazon\\.com|facebook\\.com).*$');
+        Http::assertNotSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/filter/add')
+            || str_ends_with($request->url(), '/ip/firewall/layer7-protocol/add'));
+    }
+
+    public function test_unblocking_removes_the_protocol_when_it_was_the_last_site(): void
+    {
+        $session = $this->router();
+        Http::fake(function ($request) {
+            $path = parse_url($request->url(), PHP_URL_PATH) ?: '';
+
+            $body = match (true) {
+                $request->method() === 'GET' && str_ends_with($path, '/ip/firewall/layer7-protocol') => [
+                    ['.id' => '*L1', 'name' => 'streamnet-block', 'regexp' => '^.+(facebook\\.com).*$', 'comment' => 'StreamNet'],
+                ],
                 $request->method() === 'GET' && str_ends_with($path, '/ip/dns/static') => [
                     ['.id' => '*D1', 'name' => 'facebook.com', 'type' => 'NXDOMAIN', 'comment' => 'StreamNet:facebook.com'],
-                    ['.id' => '*D2', 'regexp' => '.*\\.facebook\\.com$', 'type' => 'NXDOMAIN', 'comment' => 'StreamNet:facebook.com'],
                 ],
-                $request->method() === 'GET' && str_ends_with($path, '/ip/firewall/address-list') => [],
                 $request->method() === 'GET' && str_ends_with($path, '/ip/firewall/filter') => [
+                    ['.id' => '*R1', 'chain' => 'forward', 'action' => 'drop', 'protocol' => 'tcp', 'dst-port' => '80,443', 'layer7-protocol' => 'streamnet-block', 'comment' => 'StreamNet'],
                     ['.id' => '*F1', 'chain' => 'forward', 'action' => 'drop', 'protocol' => 'tcp', 'dst-port' => '443', 'tls-host' => 'facebook.com', 'comment' => 'StreamNet:facebook.com'],
-                    ['.id' => '*F2', 'chain' => 'forward', 'action' => 'drop', 'protocol' => 'tcp', 'dst-port' => '443', 'tls-host' => '*.facebook.com', 'comment' => 'StreamNet:facebook.com'],
                     ['.id' => '*F3', 'chain' => 'forward', 'action' => 'drop', 'protocol' => 'udp', 'dst-port' => '443', 'comment' => 'StreamNet'],
                 ],
                 $request->method() === 'GET' && str_ends_with($path, '/ip/firewall/nat') => [
                     ['.id' => '*N1', 'chain' => 'dstnat', 'action' => 'redirect', 'protocol' => 'udp', 'dst-port' => '53', 'comment' => 'StreamNet'],
                 ],
-                default => ['.id' => '*1'],
+                default => [],
             };
 
             return Http::response($body);
@@ -96,15 +116,17 @@ class DnsFilterTest extends TestCase
         $filter = app(DnsFilter::class);
         $snapshot = $filter->present($filter->read($session));
         $this->assertTrue($snapshot['rule']);
+        $this->assertSame('^.+(facebook\\.com).*$', $snapshot['regexp']);
         $this->assertSame('facebook.com', $snapshot['sites'][0]['domain']);
-        $this->assertTrue($snapshot['sites'][0]['dns']);
-        $this->assertTrue($snapshot['sites'][0]['tls']);
+        $this->assertTrue($snapshot['sites'][0]['layer7']);
+        $this->assertTrue($snapshot['sites'][0]['firewall']);
 
         $this->assertNull($filter->unblock($session, 'facebook.com'));
-        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/dns/static/remove') && ($request['.id'] ?? null) === '*D1');
-        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/dns/static/remove') && ($request['.id'] ?? null) === '*D2');
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/layer7-protocol/remove') && ($request['.id'] ?? null) === '*L1');
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/filter/remove') && ($request['.id'] ?? null) === '*R1');
         Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/filter/remove') && ($request['.id'] ?? null) === '*F1');
         Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/filter/remove') && ($request['.id'] ?? null) === '*F3');
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/dns/static/remove') && ($request['.id'] ?? null) === '*D1');
         Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ip/firewall/nat/remove') && ($request['.id'] ?? null) === '*N1');
     }
 

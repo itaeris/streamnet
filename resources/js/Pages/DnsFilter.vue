@@ -18,8 +18,8 @@ const online = computed(() => props.filter?.online === true);
 
 const columns = [
     { id: 'domain', label: 'Situs', type: 'text', first: 'asc', get: (row) => row.domain || '' },
-    { id: 'dns', label: 'Filter DNS', type: 'number', first: 'desc', get: (row) => (row.dns ? 1 : 0), show: (row) => (row.dns ? 'NXDOMAIN' : '–') },
-    { id: 'firewall', label: 'Block HTTPS', type: 'number', first: 'desc', get: (row) => (row.tls ? 1 : 0), show: (row) => (row.tls ? 'SNI' : '–') },
+    { id: 'layer7', label: 'Regexp', type: 'number', first: 'desc', get: (row) => (row.layer7 ? 1 : 0), show: (row) => (row.layer7 ? 'masuk' : '–') },
+    { id: 'firewall', label: 'Block', type: 'number', first: 'desc', get: (row) => (row.firewall ? 1 : 0), show: (row) => (row.firewall ? 'Layer 7' : '–') },
     { id: 'remove', label: '', type: 'text', first: 'asc', get: () => '' },
 ];
 
@@ -47,7 +47,7 @@ function remove(domain) {
 
     <div>
         <h2 class="text-[15px] font-semibold">Filter DNS & block situs</h2>
-        <p class="font-mono text-[11px] text-mute">HTTPS diblokir dari nama situs. DNS port 53 dipaksa lewat router, jadi DNS lain tidak bisa menghindarinya.</p>
+        <p class="font-mono text-[11px] text-mute">Situs yang diblokir masuk ke satu regexp Layer 7. Trafik TCP yang cocok dengan regexp itu dijatuhkan.</p>
     </div>
 
     <section class="mt-3 grid gap-3 sm:grid-cols-3">
@@ -56,12 +56,12 @@ function remove(domain) {
             <p class="mt-1 text-2xl font-bold">{{ loading ? '–' : sites.length }}</p>
         </article>
         <article class="noc-card p-3">
-            <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Filter DNS</p>
-            <p class="mt-1 text-2xl font-bold" :class="sites.some((site) => site.dns) ? 'text-ok' : 'text-mute'">{{ sites.some((site) => site.dns) ? 'Aktif' : 'Kosong' }}</p>
+            <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Layer 7</p>
+            <p class="mt-1 text-2xl font-bold" :class="filter?.regexp ? 'text-ok' : 'text-mute'">{{ filter?.regexp ? 'Aktif' : 'Kosong' }}</p>
         </article>
         <article class="noc-card p-3">
             <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Rule firewall</p>
-            <p class="mt-1 text-2xl font-bold" :class="filter?.rule ? 'text-ok' : 'text-mute'">{{ filter?.rule ? 'HTTPS aktif' : 'Belum ada' }}</p>
+            <p class="mt-1 text-2xl font-bold" :class="filter?.rule ? 'text-ok' : 'text-mute'">{{ filter?.rule ? 'Layer 7 aktif' : 'Belum ada' }}</p>
         </article>
     </section>
 
@@ -81,7 +81,8 @@ function remove(domain) {
         </button>
         <p v-if="form.errors.domain" class="w-full text-[11px] text-danger">{{ form.errors.domain }}</p>
         <p v-else-if="filter && !online" class="w-full text-[11px] text-warn">Router tidak menjawab, jadi daftar blokir belum bisa diubah.</p>
-        <p v-else class="w-full font-mono text-[10px] text-mute">www ikut terblokir. HTTP/3 ditutup sementara ada situs diblokir, supaya browser tidak menghindari pemeriksaan nama HTTPS.</p>
+        <p v-else class="w-full font-mono text-[10px] text-mute">www ikut terblokir, karena nama situs ada di dalam regexp. Port 80 dan 443.</p>
+        <p v-if="filter?.regexp" class="w-full font-mono text-[10px] break-all text-mute">{{ filter.regexp }}</p>
     </form>
 
     <DataTable
@@ -95,11 +96,11 @@ function remove(domain) {
         :empty="loading ? 'Memuat dari router…' : 'Belum ada situs yang diblokir.'"
         min-width="min-w-[36rem]"
     >
-        <template #dns="{ row }">
-            <span class="rounded px-1.5 py-0.5 font-mono text-[11px]" :class="row.dns ? 'bg-ok/10 text-ok' : 'text-mute'">{{ row.dns ? 'NXDOMAIN' : '–' }}</span>
+        <template #layer7="{ row }">
+            <span class="rounded px-1.5 py-0.5 font-mono text-[11px]" :class="row.layer7 ? 'bg-ok/10 text-ok' : 'text-mute'">{{ row.layer7 ? 'masuk' : '–' }}</span>
         </template>
         <template #firewall="{ row }">
-            <span class="rounded px-1.5 py-0.5 font-mono text-[11px]" :class="row.tls ? 'bg-warn/15 text-warn' : 'text-mute'">{{ row.tls ? 'SNI' : '–' }}</span>
+            <span class="rounded px-1.5 py-0.5 font-mono text-[11px]" :class="row.firewall ? 'bg-warn/15 text-warn' : 'text-mute'">{{ row.firewall ? 'Layer 7' : '–' }}</span>
         </template>
         <template #remove="{ row }">
             <button type="button" class="font-mono text-[11px] text-danger disabled:opacity-50" :disabled="removing === row.domain" @click.stop="remove(row.domain)">

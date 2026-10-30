@@ -5,8 +5,7 @@ namespace App\Services\Mikrotik;
 use App\Models\MikrotikSession;
 
 /**
- * Blocks a site by name, not by whichever IP it happens to resolve to.
- * DNS answers NXDOMAIN, port 53 is forced to the router, and HTTPS is dropped on the TLS name.
+ * Blocks sites with one Layer 7 regexp. Every blocked hostname is an alternative in that pattern.
  */
 class DnsFilter
 {
@@ -17,29 +16,72 @@ class DnsFilter
     public function __construct(private MikrotikClient $client) {}
 
     /**
-     * @return array{online: bool, rule: bool, quic_id: string|null, legacy_rule_id: string|null, nat_ids: array<int, string>, sites: array<int, array{domain: string, dns: bool, firewall: bool, tls: bool, dns_ids: array<int, string>, list_ids: array<int, string>, filter_ids: array<int, string>}>}
+     * @return array{online: bool, rule: bool, layer7_id: string|null, regexp: string, rule_ids: array<int, string>, legacy_filter_ids: array<int, string>, nat_ids: array<int, string>, sites: array<int, array{domain: string, layer7: bool, firewall: bool, dns_ids: array<int, string>, list_ids: array<int, string>, filter_ids: array<int, string>}>}
      */
     public function read(MikrotikSession $session): array
     {
         $result = $this->client->gather([
+            'layer7' => ['path' => 'ip/firewall/layer7-protocol'],
+            'filter' => ['path' => 'ip/firewall/filter'],
             'static' => ['path' => 'ip/dns/static'],
             'lists' => ['path' => 'ip/firewall/address-list'],
-            'filter' => ['path' => 'ip/firewall/filter'],
             'nat' => ['path' => 'ip/firewall/nat'],
         ], $session->connection());
 
-        if ($result['static'] === null && $result['lists'] === null && $result['filter'] === null && $result['nat'] === null) {
-            return ['online' => false, 'rule' => false, 'quic_id' => null, 'legacy_rule_id' => null, 'nat_ids' => [], 'sites' => []];
+        if ($result['layer7'] === null && $result['filter'] === null && $result['static'] === null && $result['lists'] === null && $result['nat'] === null) {
+            return $this->blank();
         }
 
+        $layer7Id = null;
+        $regexp = '';
+        foreach ($this->rows($result['layer7']) as $row) {
+            if (($row['name'] ?? '') !== self::LIST) {
+                continue;
+            }
+
+            $layer7Id = (string) ($row['.id'] ?? '');
+            $regexp = (string) ($row['regexp'] ?? '');
+        }
+
+        $inRegexp = $this->domainsIn($regexp);
         $sites = [];
+        foreach ($inRegexp as $domain) {
+            $sites[$domain]['layer7'] = true;
+        }
+
+        $ruleIds = [];
+        $legacyFilterIds = [];
+        foreach ($this->rows($result['filter']) as $row) {
+            if (! $this->enabled($row)) {
+                continue;
+            }
+
+            $id = (string) ($row['.id'] ?? '');
+            if ($this->isLayer7Rule($row)) {
+                $ruleIds[] = $id;
+
+                continue;
+            }
+
+            $comment = (string) ($row['comment'] ?? '');
+            $domain = $this->owned($comment);
+            if ($domain !== null) {
+                $sites[$domain]['filter_ids'][] = $id;
+
+                continue;
+            }
+
+            if ($comment === self::RULE) {
+                $legacyFilterIds[] = $id;
+            }
+        }
+
         foreach ($this->rows($result['static']) as $row) {
             $domain = $this->owned($row['comment'] ?? '');
             if ($domain === null || $this->truthy($row['dynamic'] ?? false)) {
                 continue;
             }
 
-            $sites[$domain]['dns'] = ($sites[$domain]['dns'] ?? false) || $this->enabled($row);
             $sites[$domain]['dns_ids'][] = (string) ($row['.id'] ?? '');
         }
 
@@ -53,51 +95,25 @@ class DnsFilter
                 continue;
             }
 
-            $sites[$domain]['list'] = true;
             $sites[$domain]['list_ids'][] = (string) ($row['.id'] ?? '');
-        }
-
-        $quicId = null;
-        $legacyRuleId = null;
-        foreach ($this->rows($result['filter']) as $row) {
-            if (! $this->enabled($row)) {
-                continue;
-            }
-
-            $domain = $this->owned($row['comment'] ?? '');
-            if ($domain !== null && ($row['tls-host'] ?? '') !== '') {
-                $sites[$domain]['tls'] = true;
-                $sites[$domain]['filter_ids'][] = (string) ($row['.id'] ?? '');
-
-                continue;
-            }
-
-            if (($row['comment'] ?? '') !== self::RULE || ($row['chain'] ?? '') !== 'forward' || ($row['action'] ?? '') !== 'drop') {
-                continue;
-            }
-
-            if ((string) ($row['protocol'] ?? '') === 'udp' && (string) ($row['dst-port'] ?? '') === '443') {
-                $quicId = (string) ($row['.id'] ?? '');
-            } elseif (($row['dst-address-list'] ?? '') === self::LIST) {
-                $legacyRuleId = (string) ($row['.id'] ?? '');
-            }
         }
 
         $natIds = [];
         foreach ($this->rows($result['nat']) as $row) {
-            if (($row['comment'] ?? '') === self::RULE && ($row['chain'] ?? '') === 'dstnat' && (string) ($row['dst-port'] ?? '') === '53' && $this->enabled($row)) {
-                $natIds[] = (string) ($row['.id'] ?? '');
+            $comment = (string) ($row['comment'] ?? '');
+            if ($comment !== self::RULE && $this->owned($comment) === null) {
+                continue;
             }
+
+            $natIds[] = (string) ($row['.id'] ?? '');
         }
 
         $listed = [];
         foreach ($sites as $domain => $site) {
-            $tls = (bool) ($site['tls'] ?? false);
             $listed[] = [
                 'domain' => $domain,
-                'dns' => (bool) ($site['dns'] ?? false),
-                'tls' => $tls,
-                'firewall' => $tls || (bool) ($site['list'] ?? false),
+                'layer7' => (bool) ($site['layer7'] ?? false),
+                'firewall' => $ruleIds !== [] && (bool) ($site['layer7'] ?? false),
                 'dns_ids' => array_values(array_filter($site['dns_ids'] ?? [])),
                 'list_ids' => array_values(array_filter($site['list_ids'] ?? [])),
                 'filter_ids' => array_values(array_filter($site['filter_ids'] ?? [])),
@@ -108,28 +124,30 @@ class DnsFilter
 
         return [
             'online' => true,
-            'rule' => $quicId !== null || $legacyRuleId !== null || collect($listed)->contains(fn (array $site) => $site['tls']),
-            'quic_id' => $quicId,
-            'legacy_rule_id' => $legacyRuleId,
+            'rule' => $layer7Id !== null && $ruleIds !== [],
+            'layer7_id' => $layer7Id !== '' ? $layer7Id : null,
+            'regexp' => $regexp,
+            'rule_ids' => array_values(array_filter($ruleIds)),
+            'legacy_filter_ids' => array_values(array_filter($legacyFilterIds)),
             'nat_ids' => array_values(array_filter($natIds)),
             'sites' => $listed,
         ];
     }
 
     /**
-     * @param  array{online: bool, rule: bool, sites: array<int, array<string, mixed>>}  $snapshot
-     * @return array{online: bool, rule: bool, sites: array<int, array{domain: string, dns: bool, firewall: bool, tls: bool}>}
+     * @param  array{online: bool, rule: bool, regexp?: string, sites: array<int, array<string, mixed>>}  $snapshot
+     * @return array{online: bool, rule: bool, regexp: string, sites: array<int, array{domain: string, layer7: bool, firewall: bool}>}
      */
     public function present(array $snapshot): array
     {
         return [
             'online' => $snapshot['online'],
             'rule' => $snapshot['rule'],
+            'regexp' => (string) ($snapshot['regexp'] ?? ''),
             'sites' => array_map(fn (array $site) => [
                 'domain' => $site['domain'],
-                'dns' => $site['dns'],
-                'firewall' => $site['firewall'],
-                'tls' => (bool) ($site['tls'] ?? false),
+                'layer7' => (bool) ($site['layer7'] ?? false),
+                'firewall' => (bool) ($site['firewall'] ?? false),
             ], $snapshot['sites']),
         ];
     }
@@ -146,57 +164,39 @@ class DnsFilter
             return 'Router tidak menjawab. Pastikan sesi ini sedang terhubung.';
         }
 
-        $site = collect($current['sites'])->firstWhere('domain', $domain);
+        $domains = collect($current['sites'])->pluck('domain')->push($domain)->unique()->sort()->values()->all();
+        $regexp = $this->compile($domains);
         $calls = [];
-        if (! ($site['dns'] ?? false)) {
-            $calls['name'] = ['method' => 'post', 'path' => 'ip/dns/static/add', 'body' => [
-                'name' => $domain,
-                'type' => 'NXDOMAIN',
-                'comment' => $this->comment($domain),
+        if ($current['layer7_id'] === null) {
+            $calls['layer7'] = ['method' => 'post', 'path' => 'ip/firewall/layer7-protocol/add', 'body' => [
+                'name' => self::LIST,
+                'regexp' => $regexp,
+                'comment' => self::RULE,
             ]];
-            $calls['regexp'] = ['method' => 'post', 'path' => 'ip/dns/static/add', 'body' => [
-                'regexp' => '.*\\.'.str_replace('.', '\\.', $domain).'$',
-                'type' => 'NXDOMAIN',
-                'comment' => $this->comment($domain),
+        } elseif ($current['regexp'] !== $regexp) {
+            $calls['layer7'] = ['method' => 'post', 'path' => 'ip/firewall/layer7-protocol/set', 'body' => [
+                '.id' => $current['layer7_id'],
+                'regexp' => $regexp,
             ]];
         }
-        if (! ($site['tls'] ?? false)) {
-            foreach ([$domain, '*.'.$domain] as $index => $host) {
-                $calls['tls'.$index] = ['method' => 'post', 'path' => 'ip/firewall/filter/add', 'body' => [
-                    'chain' => 'forward',
-                    'action' => 'drop',
-                    'protocol' => 'tcp',
-                    'dst-port' => '443',
-                    'tls-host' => $host,
-                    'comment' => $this->comment($domain),
-                    'place-before' => '0',
-                ]];
-            }
-        }
-        if (($current['quic_id'] ?? null) === null) {
-            $calls['quic'] = ['method' => 'post', 'path' => 'ip/firewall/filter/add', 'body' => [
+        if ($current['rule_ids'] === []) {
+            $calls['rule'] = ['method' => 'post', 'path' => 'ip/firewall/filter/add', 'body' => [
                 'chain' => 'forward',
                 'action' => 'drop',
-                'protocol' => 'udp',
-                'dst-port' => '443',
+                'protocol' => 'tcp',
+                'dst-port' => '80,443',
+                'layer7-protocol' => self::LIST,
                 'comment' => self::RULE,
                 'place-before' => '0',
             ]];
         }
-        if (($current['nat_ids'] ?? []) === []) {
-            foreach (['udp', 'tcp'] as $protocol) {
-                $calls['nat'.$protocol] = ['method' => 'post', 'path' => 'ip/firewall/nat/add', 'body' => [
-                    'chain' => 'dstnat',
-                    'action' => 'redirect',
-                    'protocol' => $protocol,
-                    'dst-port' => '53',
-                    'to-ports' => '53',
-                    'comment' => self::RULE,
-                ]];
-            }
+
+        $error = $this->send($session, $calls);
+        if ($error !== null) {
+            return $error;
         }
 
-        return $this->send($session, $calls);
+        return $this->send($session, $this->legacyCalls($current));
     }
 
     public function unblock(MikrotikSession $session, string $domain): ?string
@@ -216,7 +216,22 @@ class DnsFilter
             return null;
         }
 
+        $domains = collect($current['sites'])->pluck('domain')->reject(fn (string $listed) => $listed === $domain)->sort()->values()->all();
         $calls = [];
+        if ($domains === []) {
+            if ($current['layer7_id'] !== null) {
+                $calls['layer7'] = ['method' => 'post', 'path' => 'ip/firewall/layer7-protocol/remove', 'body' => ['.id' => $current['layer7_id']]];
+            }
+            foreach ($current['rule_ids'] as $index => $id) {
+                $calls['rule'.$index] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $id]];
+            }
+        } elseif ($current['layer7_id'] !== null) {
+            $calls['layer7'] = ['method' => 'post', 'path' => 'ip/firewall/layer7-protocol/set', 'body' => [
+                '.id' => $current['layer7_id'],
+                'regexp' => $this->compile($domains),
+            ]];
+        }
+
         foreach ($site['dns_ids'] as $index => $id) {
             $calls['dns'.$index] = ['method' => 'post', 'path' => 'ip/dns/static/remove', 'body' => ['.id' => $id]];
         }
@@ -226,14 +241,9 @@ class DnsFilter
         foreach ($site['filter_ids'] as $index => $id) {
             $calls['filter'.$index] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $id]];
         }
-
-        $others = collect($current['sites'])->contains(fn (array $row) => $row['domain'] !== $domain);
-        if (! $others) {
-            if ($current['quic_id']) {
-                $calls['quic'] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $current['quic_id']]];
-            }
-            if ($current['legacy_rule_id']) {
-                $calls['legacy'] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $current['legacy_rule_id']]];
+        if ($domains === []) {
+            foreach ($current['legacy_filter_ids'] as $index => $id) {
+                $calls['legacy'.$index] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $id]];
             }
             foreach ($current['nat_ids'] as $index => $id) {
                 $calls['nat'.$index] = ['method' => 'post', 'path' => 'ip/firewall/nat/remove', 'body' => ['.id' => $id]];
@@ -241,6 +251,92 @@ class DnsFilter
         }
 
         return $this->send($session, $calls);
+    }
+
+    /**
+     * @param  array{sites: array<int, array<string, mixed>>, legacy_filter_ids: array<int, string>, nat_ids: array<int, string>}  $current
+     * @return array<string, array{method: string, path: string, body: array<string, string>}>
+     */
+    private function legacyCalls(array $current): array
+    {
+        $calls = [];
+        foreach ($current['sites'] as $site) {
+            foreach ($site['dns_ids'] as $index => $id) {
+                $calls['dns'.$site['domain'].$index] = ['method' => 'post', 'path' => 'ip/dns/static/remove', 'body' => ['.id' => $id]];
+            }
+            foreach ($site['list_ids'] as $index => $id) {
+                $calls['list'.$site['domain'].$index] = ['method' => 'post', 'path' => 'ip/firewall/address-list/remove', 'body' => ['.id' => $id]];
+            }
+            foreach ($site['filter_ids'] as $index => $id) {
+                $calls['filter'.$site['domain'].$index] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $id]];
+            }
+        }
+        foreach ($current['legacy_filter_ids'] as $index => $id) {
+            $calls['legacy'.$index] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $id]];
+        }
+        foreach ($current['nat_ids'] as $index => $id) {
+            $calls['nat'.$index] = ['method' => 'post', 'path' => 'ip/firewall/nat/remove', 'body' => ['.id' => $id]];
+        }
+
+        return $calls;
+    }
+
+    /**
+     * @param  array<int, string>  $domains
+     */
+    private function compile(array $domains): string
+    {
+        $parts = array_map(fn (string $domain) => str_replace('.', '\\.', $domain), $domains);
+
+        return '^.+('.implode('|', $parts).').*$';
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function domainsIn(string $regexp): array
+    {
+        if (! preg_match('/\((.*)\)/', $regexp, $matches)) {
+            return [];
+        }
+
+        $domains = [];
+        foreach (explode('|', $matches[1]) as $part) {
+            $domain = $this->hostname(str_replace('\\.', '.', $part));
+            if ($domain !== null) {
+                $domains[] = $domain;
+            }
+        }
+
+        return $domains;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function isLayer7Rule(array $row): bool
+    {
+        return ($row['comment'] ?? '') === self::RULE
+            && ($row['layer7-protocol'] ?? '') === self::LIST
+            && ($row['chain'] ?? '') === 'forward'
+            && ($row['action'] ?? '') === 'drop';
+    }
+
+    /**
+     * @return array{online: bool, rule: bool, layer7_id: null, regexp: string, rule_ids: array<int, string>, legacy_filter_ids: array<int, string>, nat_ids: array<int, string>, sites: array<int, array<string, mixed>>}
+     */
+    private function blank(): array
+    {
+        return [
+            'online' => false,
+            'rule' => false,
+            'layer7_id' => null,
+            'regexp' => '',
+            'rule_ids' => [],
+            'legacy_filter_ids' => [],
+            'nat_ids' => [],
+            'sites' => [],
+        ];
     }
 
     /**
@@ -261,11 +357,6 @@ class DnsFilter
         $failed = collect($calls)->keys()->contains(fn (string $key) => ($result[$key] ?? null) === null);
 
         return $failed ? 'Router menolak perubahan. Pastikan user API punya izin write.' : null;
-    }
-
-    private function comment(string $domain): string
-    {
-        return 'StreamNet:'.$domain;
     }
 
     private function owned(mixed $comment): ?string

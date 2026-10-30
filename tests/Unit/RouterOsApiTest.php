@@ -48,6 +48,17 @@ class RouterOsApiTest extends TestCase
         $this->assertStringContainsString('=count-only=', $written);
     }
 
+    public function test_empty_print_is_an_empty_list(): void
+    {
+        [$client, $server] = $this->pair();
+        fwrite($server, RouterOsApi::encodeSentence(['!empty'])
+            .RouterOsApi::encodeSentence(['!done']));
+
+        $api = new RouterOsApi($client);
+
+        $this->assertSame([], $api->query('get', 'ip/firewall/layer7-protocol', []));
+    }
+
     public function test_trap_surfaces_the_router_message(): void
     {
         [$client, $server] = $this->pair();
