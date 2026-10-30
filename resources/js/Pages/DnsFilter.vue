@@ -19,7 +19,7 @@ const online = computed(() => props.filter?.online === true);
 const columns = [
     { id: 'domain', label: 'Situs', type: 'text', first: 'asc', get: (row) => row.domain || '' },
     { id: 'dns', label: 'Filter DNS', type: 'number', first: 'desc', get: (row) => (row.dns ? 1 : 0), show: (row) => (row.dns ? 'NXDOMAIN' : '–') },
-    { id: 'firewall', label: 'Block firewall', type: 'number', first: 'desc', get: (row) => (row.firewall ? 1 : 0), show: (row) => (row.firewall ? 'drop' : '–') },
+    { id: 'firewall', label: 'Block HTTPS', type: 'number', first: 'desc', get: (row) => (row.tls ? 1 : 0), show: (row) => (row.tls ? 'SNI' : '–') },
     { id: 'remove', label: '', type: 'text', first: 'asc', get: () => '' },
 ];
 
@@ -47,7 +47,7 @@ function remove(domain) {
 
     <div>
         <h2 class="text-[15px] font-semibold">Filter DNS & block situs</h2>
-        <p class="font-mono text-[11px] text-mute">DNS router menjawab NXDOMAIN, dan firewall membuang trafik ke alamat situs itu.</p>
+        <p class="font-mono text-[11px] text-mute">HTTPS diblokir dari nama situs. DNS port 53 dipaksa lewat router, jadi DNS lain tidak bisa menghindarinya.</p>
     </div>
 
     <section class="mt-3 grid gap-3 sm:grid-cols-3">
@@ -61,7 +61,7 @@ function remove(domain) {
         </article>
         <article class="noc-card p-3">
             <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Rule firewall</p>
-            <p class="mt-1 text-2xl font-bold" :class="filter?.rule ? 'text-ok' : 'text-mute'">{{ filter?.rule ? 'Drop aktif' : 'Belum ada' }}</p>
+            <p class="mt-1 text-2xl font-bold" :class="filter?.rule ? 'text-ok' : 'text-mute'">{{ filter?.rule ? 'HTTPS aktif' : 'Belum ada' }}</p>
         </article>
     </section>
 
@@ -81,7 +81,7 @@ function remove(domain) {
         </button>
         <p v-if="form.errors.domain" class="w-full text-[11px] text-danger">{{ form.errors.domain }}</p>
         <p v-else-if="filter && !online" class="w-full text-[11px] text-warn">Router tidak menjawab, jadi daftar blokir belum bisa diubah.</p>
-        <p v-else class="w-full font-mono text-[10px] text-mute">www ikut terblokir. FastTrack yang ada di depan rule ini bisa melewatkan blokir firewall; filter DNS tetap berlaku untuk klien yang memakai DNS router.</p>
+        <p v-else class="w-full font-mono text-[10px] text-mute">www ikut terblokir. HTTP/3 ditutup sementara ada situs diblokir, supaya browser tidak menghindari pemeriksaan nama HTTPS.</p>
     </form>
 
     <DataTable
@@ -99,7 +99,7 @@ function remove(domain) {
             <span class="rounded px-1.5 py-0.5 font-mono text-[11px]" :class="row.dns ? 'bg-ok/10 text-ok' : 'text-mute'">{{ row.dns ? 'NXDOMAIN' : '–' }}</span>
         </template>
         <template #firewall="{ row }">
-            <span class="rounded px-1.5 py-0.5 font-mono text-[11px]" :class="row.firewall ? 'bg-warn/15 text-warn' : 'text-mute'">{{ row.firewall ? 'drop' : '–' }}</span>
+            <span class="rounded px-1.5 py-0.5 font-mono text-[11px]" :class="row.tls ? 'bg-warn/15 text-warn' : 'text-mute'">{{ row.tls ? 'SNI' : '–' }}</span>
         </template>
         <template #remove="{ row }">
             <button type="button" class="font-mono text-[11px] text-danger disabled:opacity-50" :disabled="removing === row.domain" @click.stop="remove(row.domain)">

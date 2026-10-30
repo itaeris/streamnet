@@ -47,7 +47,7 @@ class MikrotikClient
         foreach (array_keys($calls) as $name) {
             $response = $responses[$name] ?? null;
             $out[$name] = $response instanceof Response && $response->successful()
-                ? $response->json()
+                ? ($response->json() ?? [])
                 : null;
         }
 
@@ -84,6 +84,7 @@ class MikrotikClient
                     $out[$name] = $api->query($call['method'] ?? 'get', $call['path'], $call['body'] ?? []);
                 } catch (Throwable $exception) {
                     $out[$name] = null;
+                    $out['_errors'][$name] = $exception->getMessage();
                     $closed = str_contains($exception->getMessage(), 'terputus')
                         || str_contains($exception->getMessage(), 'tepat waktu')
                         || str_contains($exception->getMessage(), 'ditutup');

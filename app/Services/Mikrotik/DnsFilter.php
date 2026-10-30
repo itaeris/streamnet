@@ -5,7 +5,8 @@ namespace App\Services\Mikrotik;
 use App\Models\MikrotikSession;
 
 /**
- * Blocks a site twice: NXDOMAIN on the router DNS, and a forward drop for the resolved address.
+ * Blocks a site by name, not by whichever IP it happens to resolve to.
+ * DNS answers NXDOMAIN, port 53 is forced to the router, and HTTPS is dropped on the TLS name.
  */
 class DnsFilter
 {
@@ -16,7 +17,7 @@ class DnsFilter
     public function __construct(private MikrotikClient $client) {}
 
     /**
-     * @return array{online: bool, rule: bool, sites: array<int, array{domain: string, dns: bool, firewall: bool, dns_ids: array<int, string>, list_ids: array<int, string>, rule_id: string|null}>}
+     * @return array{online: bool, rule: bool, quic_id: string|null, legacy_rule_id: string|null, nat_ids: array<int, string>, sites: array<int, array{domain: string, dns: bool, firewall: bool, tls: bool, dns_ids: array<int, string>, list_ids: array<int, string>, filter_ids: array<int, string>}>}
      */
     public function read(MikrotikSession $session): array
     {
@@ -24,10 +25,11 @@ class DnsFilter
             'static' => ['path' => 'ip/dns/static'],
             'lists' => ['path' => 'ip/firewall/address-list'],
             'filter' => ['path' => 'ip/firewall/filter'],
+            'nat' => ['path' => 'ip/firewall/nat'],
         ], $session->connection());
 
-        if ($result['static'] === null && $result['lists'] === null && $result['filter'] === null) {
-            return ['online' => false, 'rule' => false, 'sites' => []];
+        if ($result['static'] === null && $result['lists'] === null && $result['filter'] === null && $result['nat'] === null) {
+            return ['online' => false, 'rule' => false, 'quic_id' => null, 'legacy_rule_id' => null, 'nat_ids' => [], 'sites' => []];
         }
 
         $sites = [];
@@ -51,30 +53,54 @@ class DnsFilter
                 continue;
             }
 
-            $sites[$domain]['firewall'] = ($sites[$domain]['firewall'] ?? false) || $this->enabled($row);
+            $sites[$domain]['list'] = true;
             $sites[$domain]['list_ids'][] = (string) ($row['.id'] ?? '');
         }
 
-        $ruleId = null;
+        $quicId = null;
+        $legacyRuleId = null;
         foreach ($this->rows($result['filter']) as $row) {
-            if (($row['chain'] ?? '') === 'forward'
-                && ($row['action'] ?? '') === 'drop'
-                && ($row['dst-address-list'] ?? '') === self::LIST
-                && $this->enabled($row)) {
-                $ruleId = (string) ($row['.id'] ?? '');
-                break;
+            if (! $this->enabled($row)) {
+                continue;
+            }
+
+            $domain = $this->owned($row['comment'] ?? '');
+            if ($domain !== null && ($row['tls-host'] ?? '') !== '') {
+                $sites[$domain]['tls'] = true;
+                $sites[$domain]['filter_ids'][] = (string) ($row['.id'] ?? '');
+
+                continue;
+            }
+
+            if (($row['comment'] ?? '') !== self::RULE || ($row['chain'] ?? '') !== 'forward' || ($row['action'] ?? '') !== 'drop') {
+                continue;
+            }
+
+            if ((string) ($row['protocol'] ?? '') === 'udp' && (string) ($row['dst-port'] ?? '') === '443') {
+                $quicId = (string) ($row['.id'] ?? '');
+            } elseif (($row['dst-address-list'] ?? '') === self::LIST) {
+                $legacyRuleId = (string) ($row['.id'] ?? '');
+            }
+        }
+
+        $natIds = [];
+        foreach ($this->rows($result['nat']) as $row) {
+            if (($row['comment'] ?? '') === self::RULE && ($row['chain'] ?? '') === 'dstnat' && (string) ($row['dst-port'] ?? '') === '53' && $this->enabled($row)) {
+                $natIds[] = (string) ($row['.id'] ?? '');
             }
         }
 
         $listed = [];
         foreach ($sites as $domain => $site) {
+            $tls = (bool) ($site['tls'] ?? false);
             $listed[] = [
                 'domain' => $domain,
                 'dns' => (bool) ($site['dns'] ?? false),
-                'firewall' => (bool) ($site['firewall'] ?? false),
+                'tls' => $tls,
+                'firewall' => $tls || (bool) ($site['list'] ?? false),
                 'dns_ids' => array_values(array_filter($site['dns_ids'] ?? [])),
                 'list_ids' => array_values(array_filter($site['list_ids'] ?? [])),
-                'rule_id' => $ruleId,
+                'filter_ids' => array_values(array_filter($site['filter_ids'] ?? [])),
             ];
         }
 
@@ -82,14 +108,17 @@ class DnsFilter
 
         return [
             'online' => true,
-            'rule' => $ruleId !== null,
+            'rule' => $quicId !== null || $legacyRuleId !== null || collect($listed)->contains(fn (array $site) => $site['tls']),
+            'quic_id' => $quicId,
+            'legacy_rule_id' => $legacyRuleId,
+            'nat_ids' => array_values(array_filter($natIds)),
             'sites' => $listed,
         ];
     }
 
     /**
      * @param  array{online: bool, rule: bool, sites: array<int, array<string, mixed>>}  $snapshot
-     * @return array{online: bool, rule: bool, sites: array<int, array{domain: string, dns: bool, firewall: bool}>}
+     * @return array{online: bool, rule: bool, sites: array<int, array{domain: string, dns: bool, firewall: bool, tls: bool}>}
      */
     public function present(array $snapshot): array
     {
@@ -100,6 +129,7 @@ class DnsFilter
                 'domain' => $site['domain'],
                 'dns' => $site['dns'],
                 'firewall' => $site['firewall'],
+                'tls' => (bool) ($site['tls'] ?? false),
             ], $snapshot['sites']),
         ];
     }
@@ -130,21 +160,40 @@ class DnsFilter
                 'comment' => $this->comment($domain),
             ]];
         }
-        if (! ($site['firewall'] ?? false)) {
-            $calls['list'] = ['method' => 'post', 'path' => 'ip/firewall/address-list/add', 'body' => [
-                'list' => self::LIST,
-                'address' => $domain,
-                'comment' => $this->comment($domain),
-            ]];
+        if (! ($site['tls'] ?? false)) {
+            foreach ([$domain, '*.'.$domain] as $index => $host) {
+                $calls['tls'.$index] = ['method' => 'post', 'path' => 'ip/firewall/filter/add', 'body' => [
+                    'chain' => 'forward',
+                    'action' => 'drop',
+                    'protocol' => 'tcp',
+                    'dst-port' => '443',
+                    'tls-host' => $host,
+                    'comment' => $this->comment($domain),
+                    'place-before' => '0',
+                ]];
+            }
         }
-        if (! $current['rule']) {
-            $calls['rule'] = ['method' => 'post', 'path' => 'ip/firewall/filter/add', 'body' => [
+        if (($current['quic_id'] ?? null) === null) {
+            $calls['quic'] = ['method' => 'post', 'path' => 'ip/firewall/filter/add', 'body' => [
                 'chain' => 'forward',
                 'action' => 'drop',
-                'dst-address-list' => self::LIST,
+                'protocol' => 'udp',
+                'dst-port' => '443',
                 'comment' => self::RULE,
                 'place-before' => '0',
             ]];
+        }
+        if (($current['nat_ids'] ?? []) === []) {
+            foreach (['udp', 'tcp'] as $protocol) {
+                $calls['nat'.$protocol] = ['method' => 'post', 'path' => 'ip/firewall/nat/add', 'body' => [
+                    'chain' => 'dstnat',
+                    'action' => 'redirect',
+                    'protocol' => $protocol,
+                    'dst-port' => '53',
+                    'to-ports' => '53',
+                    'comment' => self::RULE,
+                ]];
+            }
         }
 
         return $this->send($session, $calls);
@@ -174,10 +223,21 @@ class DnsFilter
         foreach ($site['list_ids'] as $index => $id) {
             $calls['list'.$index] = ['method' => 'post', 'path' => 'ip/firewall/address-list/remove', 'body' => ['.id' => $id]];
         }
+        foreach ($site['filter_ids'] as $index => $id) {
+            $calls['filter'.$index] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $id]];
+        }
 
-        $others = collect($current['sites'])->contains(fn (array $row) => $row['domain'] !== $domain && $row['firewall']);
-        if (! $others && $current['rule'] && $site['rule_id']) {
-            $calls['rule'] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $site['rule_id']]];
+        $others = collect($current['sites'])->contains(fn (array $row) => $row['domain'] !== $domain);
+        if (! $others) {
+            if ($current['quic_id']) {
+                $calls['quic'] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $current['quic_id']]];
+            }
+            if ($current['legacy_rule_id']) {
+                $calls['legacy'] = ['method' => 'post', 'path' => 'ip/firewall/filter/remove', 'body' => ['.id' => $current['legacy_rule_id']]];
+            }
+            foreach ($current['nat_ids'] as $index => $id) {
+                $calls['nat'.$index] = ['method' => 'post', 'path' => 'ip/firewall/nat/remove', 'body' => ['.id' => $id]];
+            }
         }
 
         return $this->send($session, $calls);
@@ -193,6 +253,11 @@ class DnsFilter
         }
 
         $result = $this->client->gather($calls, $session->connection());
+        $errors = array_values(array_filter($result['_errors'] ?? []));
+        if ($errors !== []) {
+            return 'Router menolak: '.$errors[0];
+        }
+
         $failed = collect($calls)->keys()->contains(fn (string $key) => ($result[$key] ?? null) === null);
 
         return $failed ? 'Router menolak perubahan. Pastikan user API punya izin write.' : null;
