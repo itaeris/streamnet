@@ -2,11 +2,14 @@
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { live } from '../composables/useBoardTime';
 import { formatRate } from '../lib/format';
+import { pointLabel } from '../lib/time';
 
 const props = defineProps({
     points: { type: Array, default: () => [] },
     heightClass: { type: String, default: 'h-28' },
     axis: { type: Boolean, default: false },
+    domainStart: { type: Number, default: 0 },
+    domainEnd: { type: Number, default: 0 },
 });
 
 const uid = useId();
@@ -42,7 +45,10 @@ const chart = computed(() => {
     const yOf = (value) => padTop + (1 - (Number(value) || 0) / max) * plotHeight;
     const stamps = samples.map((point) => point.ts).filter((stamp) => stamp > 0);
     const ownDomain = stamps.length > 1 ? { start: Math.min(...stamps), end: Math.max(...stamps) } : null;
-    const domain = view.value?.end > view.value?.start ? view.value : ownDomain;
+    const forced = Number(props.domainEnd) > Number(props.domainStart)
+        ? { start: Number(props.domainStart), end: Number(props.domainEnd) }
+        : null;
+    const domain = view.value?.end > view.value?.start ? view.value : (forced || ownDomain);
     const timed = Boolean(domain && domain.end > domain.start);
     const xOf = (point, index) => {
         if (timed && point.ts) {
@@ -104,9 +110,9 @@ const chart = computed(() => {
         samples,
         timed,
         domain,
-        start: samples[0]?.t || '',
-        middle: samples[Math.floor(samples.length / 2)]?.t || '',
-        end: samples.at(-1)?.t || '',
+        start: axisLabel(domain, samples[0]?.t || '', 0),
+        middle: axisLabel(domain, samples[Math.floor(samples.length / 2)]?.t || '', 0.5),
+        end: axisLabel(domain, samples.at(-1)?.t || '', 1),
     };
 });
 
@@ -140,8 +146,8 @@ function follow(next) {
 
     fromPoints = clone(rendered.value);
     toPoints = target;
-    fromDomain = domainOf(fromPoints);
-    toDomain = domainOf(toPoints);
+    fromDomain = forcedDomain() ? null : domainOf(fromPoints);
+    toDomain = forcedDomain() ? null : domainOf(toPoints);
     startedAt = performance.now();
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(tick);
@@ -151,12 +157,12 @@ function tick(now) {
     const progress = Math.min(1, (now - startedAt) / glideMs);
     const eased = 1 - (1 - progress) ** 3;
     rendered.value = mix(fromPoints, toPoints, eased);
-    view.value = fromDomain && toDomain
-        ? {
+    view.value = forcedDomain() || !(fromDomain && toDomain)
+        ? null
+        : {
             start: fromDomain.start + (toDomain.start - fromDomain.start) * eased,
             end: fromDomain.end + (toDomain.end - fromDomain.end) * eased,
-        }
-        : toDomain;
+        };
 
     if (progress < 1) {
         frame = requestAnimationFrame(tick);
@@ -208,6 +214,22 @@ function clone(points) {
         rx: Number(point.rx) || 0,
         tx: Number(point.tx) || 0,
     }));
+}
+
+function forcedDomain() {
+    return Number(props.domainEnd) > Number(props.domainStart)
+        ? { start: Number(props.domainStart), end: Number(props.domainEnd) }
+        : null;
+}
+
+function axisLabel(domain, fallback, at) {
+    if (!domain || (!forcedDomain() && !view.value)) {
+        return fallback;
+    }
+
+    const ts = Math.round(domain.start + (domain.end - domain.start) * at);
+
+    return pointLabel(ts, Math.max(1, (domain.end - domain.start) / 60));
 }
 
 function domainOf(points) {

@@ -7,7 +7,7 @@ import PagedTable from '../Components/PagedTable.vue';
 import PreviewBinder from '../Components/PreviewBinder.vue';
 import LiveRate from '../Components/LiveRate.vue';
 import TrafficChart from '../Components/TrafficChart.vue';
-import { live as boardLive, pinned, ranges, refreshId } from '../composables/useBoardTime';
+import { live as boardLive, liveSpans, pinned, ranges, refreshId } from '../composables/useBoardTime';
 import { useBoardPulse } from '../composables/usePulse';
 import { usePreview } from '../composables/usePreview';
 import { clockMillis, durationSeconds, formatBytes, formatRate, formatUptime, percent } from '../lib/format';
@@ -28,7 +28,12 @@ const props = defineProps({
 
 const live = useBoardPulse();
 const query = '';
-const rangeLabel = computed(() => (boardLive.value ? 'Live' : (ranges.find((item) => item.minutes === props.minutes)?.label ?? 'Last 30 minutes')));
+const rangeLabel = computed(() => (boardLive.value
+    ? (liveSpans.find((item) => item.minutes === props.minutes)?.label ?? '24 jam')
+    : (ranges.find((item) => item.minutes === props.minutes)?.label ?? 'Last 30 minutes')));
+const axisEnd = ref(props.to || Math.floor(Date.now() / 1000));
+const axisStart = computed(() => props.from || axisEnd.value - (Number(props.minutes) || 30) * 60);
+const loadedMinutes = ref(props.minutes);
 
 const points = ref([...(props.series ?? [])]);
 const bridgePoints = ref([...(props.bridge?.series ?? [])]);
@@ -44,12 +49,18 @@ function bridgeInterface(pulse) {
 
 const bridgeName = computed(() => bridgeInterface(live.value)?.name || props.bridge?.name || '');
 
-watch(() => props.series, (next) => {
-    points.value = adoptSeries(points.value, next ?? [], boardLive.value);
-});
-
-watch(() => props.bridge?.series, (next) => {
-    bridgePoints.value = adoptSeries(bridgePoints.value, next ?? [], boardLive.value);
+watch(() => [props.minutes, props.series, props.bridge?.series], () => {
+    const replace = !boardLive.value || loadedMinutes.value !== props.minutes;
+    loadedMinutes.value = props.minutes;
+    points.value = replace || points.value.length === 0
+        ? [...(props.series ?? [])]
+        : adoptSeries(points.value, props.series ?? [], true);
+    bridgePoints.value = replace || bridgePoints.value.length === 0
+        ? [...(props.bridge?.series ?? [])]
+        : adoptSeries(bridgePoints.value, props.bridge?.series ?? [], true);
+    if (!props.to) {
+        axisEnd.value = points.value.at(-1)?.ts || bridgePoints.value.at(-1)?.ts || Math.floor(Date.now() / 1000);
+    }
 });
 
 watch(() => props.logs, (next) => {
@@ -73,25 +84,26 @@ function rememberLog(entries) {
 function onPulse(next) {
     if ((boardLive.value || !pinned.value) && next?.wan) {
         const ts = next.sampled_at ? Math.floor(Date.parse(next.sampled_at) / 1000) : Math.floor(Date.now() / 1000);
-        const span = boardLive.value ? 31 * 1440 : props.minutes;
+        if (!props.to) {
+            axisEnd.value = ts;
+        }
         points.value = pushPoint(points.value, {
-            t: pointLabel(ts, span),
+            t: pointLabel(ts, props.minutes),
             ts,
             rx: next.wan.rx_bps,
             tx: next.wan.tx_bps,
-        }, span, boardLive.value ? null : props.from, boardLive.value ? null : props.to);
+        }, props.minutes, props.from, props.to);
     }
 
     const bridge = bridgeInterface(next);
     if ((boardLive.value || !pinned.value) && bridge) {
         const ts = next.sampled_at ? Math.floor(Date.parse(next.sampled_at) / 1000) : Math.floor(Date.now() / 1000);
-        const span = boardLive.value ? 31 * 1440 : props.minutes;
         bridgePoints.value = pushPoint(bridgePoints.value, {
-            t: pointLabel(ts, span),
+            t: pointLabel(ts, props.minutes),
             ts,
             rx: bridge.rx_bps,
             tx: bridge.tx_bps,
-        }, span, boardLive.value ? null : props.from, boardLive.value ? null : props.to);
+        }, props.minutes, props.from, props.to);
     }
 
     rememberLog(next.logs);
@@ -117,6 +129,8 @@ function interfacePreview(iface, sampledAt = null, history = []) {
             tx,
             at: sampledAt,
             points: history,
+            from: axisStart.value,
+            to: axisEnd.value,
         },
         tabs: [
             {
@@ -362,7 +376,7 @@ const visibleIfaces = (live, query) => {
                     </div>
                 </div>
                 <div class="mt-3 rounded bg-sink p-2">
-                    <TrafficChart :points="points" axis height-class="h-56" />
+                    <TrafficChart :points="points" axis height-class="h-56" :domain-start="axisStart" :domain-end="axisEnd" />
                 </div>
                 <div v-if="bridgeName" class="mt-4">
                     <div class="flex flex-wrap items-end justify-between gap-2">
@@ -373,7 +387,7 @@ const visibleIfaces = (live, query) => {
                         </div>
                     </div>
                     <div class="mt-2 rounded bg-sink p-2">
-                        <TrafficChart :points="bridgePoints" axis height-class="h-56" />
+                        <TrafficChart :points="bridgePoints" axis height-class="h-56" :domain-start="axisStart" :domain-end="axisEnd" />
                     </div>
                 </div>
             </article>

@@ -5,7 +5,7 @@ import MenuPanel from '../Components/MenuPanel.vue';
 import PageSkeleton from '../Components/PageSkeleton.vue';
 import PreviewDrawer from '../Components/PreviewDrawer.vue';
 import TimeBar from '../Components/TimeBar.vue';
-import { barePath, boardPaths, boardQuery, live, pinned, rangeMinutes, refreshId, refreshSeconds, syncBoardFromUrl, useBoardTime, withSite } from '../composables/useBoardTime';
+import { barePath, boardPaths, boardQuery, live, liveSpan, pinned, rangeMinutes, refreshId, refreshSeconds, syncBoardFromUrl, useBoardTime, withSite } from '../composables/useBoardTime';
 import { usePreview } from '../composables/usePreview';
 import { pulseKey, usePulse } from '../composables/usePulse';
 import { useTheme } from '../composables/useTheme';
@@ -161,7 +161,7 @@ function windowMissing(url) {
 
     const params = new URLSearchParams(String(url).split('?')[1] || '');
     if (live.value) {
-        return params.get('live') !== '1';
+        return params.get('live') !== '1' || params.get('span') !== String(liveSpan.value);
     }
 
     if (params.get('live') === '1' || params.has('minutes') || params.has('from') || params.has('to')) {

@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\DhcpLease;
+use App\Models\InterfaceSample;
 use App\Models\MikrotikSession;
 use App\Models\RouterLog;
 use App\Models\SecurityEvent;
 use App\Models\User;
+use App\Services\AnalyticsQuery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -194,5 +196,57 @@ class TimeWindowTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('live', true)
                 ->has('leases', 2));
+    }
+
+    public function test_live_chart_span_is_a_day_a_week_or_a_month(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->get('/?live=1')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('live', true)->where('minutes', 1440));
+
+        $this->actingAs($user)
+            ->get('/bandwidth?live=1&span=10080')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('live', true)->where('minutes', 10080));
+
+        $this->actingAs($user)
+            ->get('/?live=1&span=30')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('live', true)->where('minutes', 1440));
+    }
+
+    public function test_a_long_chart_averages_samples_without_loading_every_row(): void
+    {
+        $session = MikrotikSession::query()->create([
+            'name' => 'Utama',
+            'host' => '10.10.10.1',
+            'scheme' => 'http',
+            'username' => 'wiki',
+            'password' => 'secret',
+            'enabled' => true,
+        ]);
+        InterfaceSample::query()->create([
+            'mikrotik_session_id' => $session->id,
+            'name' => 'ether1',
+            'sampled_at' => now()->subHours(5),
+            'rx_bps' => 1000,
+            'tx_bps' => 500,
+        ]);
+        InterfaceSample::query()->create([
+            'mikrotik_session_id' => $session->id,
+            'name' => 'ether1',
+            'sampled_at' => now()->subMinutes(5),
+            'rx_bps' => 3000,
+            'tx_bps' => 1500,
+        ]);
+
+        $series = app(AnalyticsQuery::class)->interfaceSeries($session->id, 'ether1', now()->subDay(), now());
+
+        $this->assertCount(2, $series);
+        $this->assertSame(1000, $series[0]['rx']);
+        $this->assertSame(3000, $series[1]['rx']);
     }
 }

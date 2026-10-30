@@ -10,6 +10,7 @@ use App\Models\SecurityEvent;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class AnalyticsQuery
 {
@@ -40,13 +41,18 @@ class AnalyticsQuery
         $now = now()->getTimestamp();
 
         if ($request->boolean('live')) {
+            $span = (int) $request->integer('span', 1440);
+            if (! in_array($span, [1440, 10080, 43200], true)) {
+                $span = 1440;
+            }
             $end = now();
 
             return [
-                'minutes' => 2880,
+                'minutes' => $span,
                 'from' => null,
                 'to' => null,
                 'start' => $end->copy()->subDays(31),
+                'chart_start' => $end->copy()->subMinutes($span),
                 'end' => $end,
                 'live' => true,
             ];
@@ -62,6 +68,7 @@ class AnalyticsQuery
                 'from' => $from,
                 'to' => $to,
                 'start' => Carbon::createFromTimestamp($from),
+                'chart_start' => Carbon::createFromTimestamp($from),
                 'end' => Carbon::createFromTimestamp($to),
                 'live' => false,
             ];
@@ -80,6 +87,7 @@ class AnalyticsQuery
             'from' => null,
             'to' => null,
             'start' => $end->copy()->subMinutes($minutes),
+            'chart_start' => $end->copy()->subMinutes($minutes),
             'end' => $end,
             'live' => false,
         ];
@@ -94,13 +102,17 @@ class AnalyticsQuery
             return [];
         }
 
-        $rows = InterfaceSample::query()
+        $query = InterfaceSample::query()
             ->where('mikrotik_session_id', $sessionId)
             ->where('name', $name)
-            ->whereBetween('sampled_at', [$start, $end])
-            ->orderBy('sampled_at')
-            ->toBase()
-            ->get(['sampled_at', 'rx_bps', 'tx_bps']);
+            ->whereBetween('sampled_at', [$start, $end]);
+
+        $bucket = $this->bucketSeconds($start, $end, $maxPoints);
+        if ($bucket > 0) {
+            return $this->bucketed($query, $start, $bucket, false);
+        }
+
+        $rows = $query->orderBy('sampled_at')->toBase()->get(['sampled_at', 'rx_bps', 'tx_bps']);
 
         return $this->downsample($rows, $maxPoints, $start, $end);
     }
@@ -115,13 +127,17 @@ class AnalyticsQuery
             return [];
         }
 
-        $rows = InterfaceSample::query()
+        $query = InterfaceSample::query()
             ->where('mikrotik_session_id', $sessionId)
             ->whereIn('name', $names)
-            ->whereBetween('sampled_at', [$start, $end])
-            ->orderBy('sampled_at')
-            ->toBase()
-            ->get(['name', 'sampled_at', 'rx_bps', 'tx_bps']);
+            ->whereBetween('sampled_at', [$start, $end]);
+
+        $bucket = $this->bucketSeconds($start, $end, $maxPoints);
+        if ($bucket > 0) {
+            return $this->bucketed($query, $start, $bucket, true);
+        }
+
+        $rows = $query->orderBy('sampled_at')->toBase()->get(['name', 'sampled_at', 'rx_bps', 'tx_bps']);
 
         return $rows
             ->groupBy('name')
@@ -235,6 +251,63 @@ class AnalyticsQuery
         $seconds = (int) ($match[5] ?? 0);
 
         return ((($weeks * 7 + $days) * 24 + $hours) * 60 + $minutes) * 60 + $seconds;
+    }
+
+    private function bucketSeconds(Carbon $start, Carbon $end, int $maxPoints): int
+    {
+        $span = max(1, $end->getTimestamp() - $start->getTimestamp());
+        if ($span <= 2 * 3600) {
+            return 0;
+        }
+
+        return (int) max(60, (int) ceil($span / max(1, $maxPoints)));
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<InterfaceSample>  $query
+     * @return array<int, array{t: string, ts: int, rx: int, tx: int}>|array<string, array<int, array{t: string, ts: int, rx: int, tx: int}>>
+     */
+    private function bucketed($query, Carbon $start, int $bucket, bool $byName): array
+    {
+        $origin = $start->getTimestamp();
+        $driver = $query->getConnection()->getDriverName();
+        $stamp = $driver === 'sqlite'
+            ? "CAST(strftime('%s', sampled_at) AS INTEGER)"
+            : 'UNIX_TIMESTAMP(sampled_at)';
+        $bucketExpr = "FLOOR(($stamp - $origin) / $bucket)";
+        $timezone = config('app.timezone');
+        $format = $bucket >= 300 ? 'd M H:i' : 'H:i:s';
+        $select = [
+            DB::raw("$bucketExpr as bucket"),
+            DB::raw("MIN($stamp) as ts"),
+            DB::raw('ROUND(AVG(rx_bps)) as rx'),
+            DB::raw('ROUND(AVG(tx_bps)) as tx'),
+        ];
+        if ($byName) {
+            $select[] = 'name';
+        }
+
+        $builder = $query->toBase()->select($select)->groupBy(DB::raw($bucketExpr))->orderBy('bucket');
+        if ($byName) {
+            $builder->groupBy('name')->orderBy('name');
+        }
+
+        $points = [];
+        foreach ($builder->get() as $row) {
+            $point = [
+                't' => Carbon::createFromTimestamp((int) $row->ts, $timezone)->format($format),
+                'ts' => (int) $row->ts,
+                'rx' => (int) $row->rx,
+                'tx' => (int) $row->tx,
+            ];
+            if ($byName) {
+                $points[(string) $row->name][] = $point;
+            } else {
+                $points[] = $point;
+            }
+        }
+
+        return $points;
     }
 
     /**

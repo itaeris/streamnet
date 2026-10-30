@@ -1495,7 +1495,7 @@ class MikrotikPoller
     private function prune(): void
     {
         SystemSample::query()->where('sampled_at', '<', now()->subHours(48))->delete();
-        InterfaceSample::query()->where('sampled_at', '<', now()->subHours(48))->delete();
+        InterfaceSample::query()->where('sampled_at', '<', now()->subDays(30))->delete();
         RouterLog::query()->where('logged_at', '<', now()->subDays(14))->delete();
         DnsQuery::query()->where('logged_at', '<', now()->subDays(7))->delete();
         SecurityEvent::query()->where('occurred_at', '<', now()->subDays(30))->delete();

@@ -1,12 +1,12 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import AppLayout from '../Layouts/AppLayout.vue';
 import Dropdown from '../Components/Dropdown.vue';
 import PulseWatch from '../Components/PulseWatch.vue';
 import LiveRate from '../Components/LiveRate.vue';
 import TrafficChart from '../Components/TrafficChart.vue';
-import { live as boardLive, pinned } from '../composables/useBoardTime';
+import { live as boardLive, liveSpans, pinned } from '../composables/useBoardTime';
 import { useBoardPulse } from '../composables/usePulse';
 import { formatBytes } from '../lib/format';
 import { adoptSeries, pointLabel, pushPoint } from '../lib/time';
@@ -26,20 +26,32 @@ const query = '';
 const cloneSeries = (value) => JSON.parse(JSON.stringify(value ?? {}));
 const charts = ref(cloneSeries(props.series));
 const selected = ref(props.pulse?.wan?.name || Object.keys(props.series ?? {})[0] || '');
+const loadedMinutes = ref(props.minutes);
+const axisEnd = ref(props.to || Math.floor(Date.now() / 1000));
+const axisStart = computed(() => props.from || axisEnd.value - (Number(props.minutes) || 30) * 60);
+const spanLabel = computed(() => liveSpans.find((item) => item.minutes === props.minutes)?.label ?? '24 jam');
 
 watch(() => props.series, (next) => {
     const incoming = next ?? {};
-    if (!boardLive.value || Object.keys(charts.value).length === 0) {
+    const replace = !boardLive.value || loadedMinutes.value !== props.minutes || Object.keys(charts.value).length === 0;
+    loadedMinutes.value = props.minutes;
+    if (replace) {
         charts.value = cloneSeries(incoming);
     } else {
         const merged = { ...charts.value };
         for (const [name, rows] of Object.entries(incoming)) {
-            merged[name] = adoptSeries(merged[name] ?? [], rows ?? [], boardLive.value);
+            merged[name] = adoptSeries(merged[name] ?? [], rows ?? [], true);
         }
         charts.value = merged;
     }
     if (!selected.value) {
         selected.value = Object.keys(charts.value)[0] || '';
+    }
+    if (!props.to) {
+        const newest = Math.max(0, ...Object.values(charts.value).flat().map((point) => Number(point?.ts) || 0));
+        if (newest > 0) {
+            axisEnd.value = newest;
+        }
     }
 });
 
@@ -54,18 +66,20 @@ function onPulse(next) {
     }
 
     const ts = next?.sampled_at ? Math.floor(Date.parse(next.sampled_at) / 1000) : Math.floor(Date.now() / 1000);
+    if (!props.to) {
+        axisEnd.value = ts;
+    }
 
     for (const iface of next?.interfaces ?? []) {
         const current = charts.value[iface.name] ?? [];
-        const span = boardLive.value ? 31 * 1440 : props.minutes;
         charts.value = {
             ...charts.value,
             [iface.name]: pushPoint(current, {
-                t: pointLabel(ts, span),
+                t: pointLabel(ts, props.minutes),
                 ts,
                 rx: iface.rx_bps,
                 tx: iface.tx_bps,
-            }, span, boardLive.value ? null : props.from, boardLive.value ? null : props.to),
+            }, props.minutes, props.from, props.to),
         };
     }
 }
@@ -89,7 +103,7 @@ const visibleIfaces = (live, query) => {
 
         <div>
             <h2 class="text-[15px] font-semibold">Interfaces & traffic</h2>
-            <p class="font-mono text-[11px] text-mute">{{ boardLive ? 'Live · RX cyan · TX green' : 'RX cyan · TX green · rentang diatur dari bilah waktu' }}</p>
+            <p class="font-mono text-[11px] text-mute">{{ boardLive ? `Live · ${spanLabel} · RX cyan · TX green` : 'RX cyan · TX green · rentang diatur dari bilah waktu' }}</p>
         </div>
 
         <article class="noc-card mt-3 p-3">
@@ -108,7 +122,7 @@ const visibleIfaces = (live, query) => {
                 </p>
             </div>
             <div class="mt-3 rounded bg-sink p-2">
-                <TrafficChart :key="selected" :points="charts[selected] || []" axis height-class="h-64" />
+                <TrafficChart :key="selected" :points="charts[selected] || []" axis height-class="h-64" :domain-start="axisStart" :domain-end="axisEnd" />
             </div>
         </article>
 
@@ -130,7 +144,7 @@ const visibleIfaces = (live, query) => {
                     <span class="text-mute"> · </span>
                     <span class="text-ok"><LiveRate :value="iface.tx_bps" /></span>
                 </p>
-                <TrafficChart class="mt-2" :points="charts[iface.name] || []" height-class="h-16" />
+                <TrafficChart class="mt-2" :points="charts[iface.name] || []" height-class="h-16" :domain-start="axisStart" :domain-end="axisEnd" />
                 <p class="mt-2 font-mono text-[11px] text-mute">RX {{ formatBytes(iface.rx_bytes) }} · err {{ iface.rx_error }} · drop {{ iface.rx_drop }}</p>
             </button>
         </section>

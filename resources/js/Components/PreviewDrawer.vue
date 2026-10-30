@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import LiveRate from './LiveRate.vue';
 import ToggleSwitch from './ToggleSwitch.vue';
 import TrafficChart from './TrafficChart.vue';
-import { live } from '../composables/useBoardTime';
+import { live, liveSpan, liveSpans } from '../composables/useBoardTime';
 import { useLeaseAlias } from '../composables/useLeaseAlias';
 import { usePreview } from '../composables/usePreview';
 import { pushPoint } from '../lib/time';
@@ -46,7 +46,7 @@ function rememberRate(value) {
 
     const parsed = value.stream.at ? Math.floor(Date.parse(value.stream.at) / 1000) : Math.floor(Date.now() / 1000);
     const ts = Number.isFinite(parsed) ? parsed : Math.floor(Date.now() / 1000);
-    const span = live.value ? 31 * 1440 : 5;
+    const span = live.value ? liveSpan.value : 5;
     series.value = pushPoint(series.value, {
         ts,
         rx: Number(value.stream.rx) || 0,
@@ -274,13 +274,13 @@ onBeforeUnmount(() => {
                 <section v-if="panel?.stream && active?.id === 'overview'" class="rounded-xl border border-edge bg-menu px-3 py-3">
                     <div class="flex items-center justify-between gap-3">
                         <p class="text-[11px] text-mute">Bandwidth</p>
-                        <p class="font-mono text-[10px] text-mute">{{ live ? 'Live' : '5 menit' }}</p>
+                        <p class="font-mono text-[10px] text-mute">{{ live ? (liveSpans.find((item) => item.minutes === liveSpan)?.label ?? '24 jam') : '5 menit' }}</p>
                     </div>
                     <div class="mt-2 flex items-end justify-between gap-3">
                         <p class="font-mono text-sm text-cyan">{{ panel.stream.rxLabel || '↓ RX' }} <LiveRate :key="`${panel.key}-rx`" :value="panel.stream.rx" /></p>
                         <p v-if="panel.stream.txLabel !== ''" class="font-mono text-sm text-ok">{{ panel.stream.txLabel || '↑ TX' }} <LiveRate :key="`${panel.key}-tx`" :value="panel.stream.tx" /></p>
                     </div>
-                    <TrafficChart :key="panel.key" class="mt-2" :points="series" axis height-class="h-32" />
+                    <TrafficChart :key="panel.key" class="mt-2" :points="series" axis height-class="h-32" :domain-start="panel.stream.from || 0" :domain-end="panel.stream.to || 0" />
                     <p v-if="panel.stream.flows != null" class="mt-1 font-mono text-[10px] text-mute">{{ panel.stream.flows }} koneksi aktif</p>
                 </section>
 

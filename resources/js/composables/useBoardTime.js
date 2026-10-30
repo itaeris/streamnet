@@ -13,6 +13,12 @@ export const ranges = [
     { minutes: 2880, label: 'Last 2 days' },
 ];
 
+export const liveSpans = [
+    { minutes: 1440, label: '24 jam' },
+    { minutes: 10080, label: '7 hari' },
+    { minutes: 43200, label: '30 hari' },
+];
+
 export const boardPaths = ['/', '/bandwidth', '/dhcp', '/dns', '/dns-filter', '/logs', '/security', '/topology', '/pengaturan', '/pengaturan/sesi', '/pengaturan/unifi', '/pengaturan/pengguna'];
 
 export function barePath(url, slug = '') {
@@ -69,6 +75,8 @@ function stored(key, fallback) {
 
 const storedMinutes = Number(stored('board.minutes', '30'));
 export const rangeMinutes = ref(ranges.some((item) => item.minutes === storedMinutes) ? storedMinutes : 30);
+const storedSpan = Number(stored('board.span', '1440'));
+export const liveSpan = ref(liveSpans.some((item) => item.minutes === storedSpan) ? storedSpan : 1440);
 export const refreshId = ref(refreshes.some((item) => item.id === stored('board.refresh', 'auto')) ? stored('board.refresh', 'auto') : 'auto');
 export const live = ref(stored('board.live', '1') === '1');
 export const pinned = ref(null);
@@ -112,6 +120,10 @@ function rememberLive(on) {
 
 if (typeof window !== 'undefined') {
     watch(rangeMinutes, (value) => localStorage.setItem('board.minutes', String(value)));
+    watch(liveSpan, (value) => {
+        localStorage.setItem('board.span', String(value));
+        document.cookie = `board_span=${value};path=/;max-age=31536000;SameSite=Lax`;
+    });
     watch(refreshId, (value) => localStorage.setItem('board.refresh', value));
     watch(live, rememberLive);
     rememberLive(live.value);
@@ -210,7 +222,7 @@ export function refreshSeconds() {
 
 export function boardQuery() {
     if (live.value) {
-        return { live: 1 };
+        return { live: 1, span: liveSpan.value };
     }
 
     if (pinned.value) {
@@ -226,6 +238,10 @@ export function syncBoardFromUrl(url) {
     if (params.get('live') === '1') {
         live.value = true;
         pinned.value = null;
+        const span = Number(params.get('span'));
+        if (liveSpans.some((item) => item.minutes === span)) {
+            liveSpan.value = span;
+        }
 
         return;
     }
@@ -271,6 +287,15 @@ export function useBoardTime() {
     function selectRange(minutes) {
         rangeMinutes.value = minutes;
         pinned.value = null;
+        apply();
+    }
+
+    function selectLiveSpan(minutes) {
+        if (!liveSpans.some((item) => item.minutes === minutes) || liveSpan.value === minutes) {
+            return;
+        }
+
+        liveSpan.value = minutes;
         apply();
     }
 
@@ -335,5 +360,5 @@ export function useBoardTime() {
         router.reload({ preserveState: true, preserveScroll: true });
     }
 
-    return { apply, selectRange, selectRefresh, setLive, shiftWindow, zoomOut, refreshNow, timedPath };
+    return { apply, selectRange, selectLiveSpan, selectRefresh, setLive, shiftWindow, zoomOut, refreshNow, timedPath };
 }

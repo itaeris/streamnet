@@ -32,7 +32,7 @@ class BandwidthController extends Controller
             'from' => $window['from'],
             'to' => $window['to'],
             'live' => $window['live'],
-            'series' => fn () => $analytics->interfaceSeriesMap($session?->id, $names->all(), $window['start'], $window['end']),
+            'series' => fn () => $analytics->interfaceSeriesMap($session?->id, $names->all(), $window['chart_start'], $window['end']),
         ]);
     }
 }

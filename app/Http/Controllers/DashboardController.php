@@ -24,10 +24,10 @@ class DashboardController extends Controller
             'from' => $window['from'],
             'to' => $window['to'],
             'live' => $window['live'],
-            'series' => fn () => $analytics->interfaceSeries($session?->id, $wan, $window['start'], $window['end']),
+            'series' => fn () => $analytics->interfaceSeries($session?->id, $wan, $window['chart_start'], $window['end']),
             'bridge' => fn () => [
                 'name' => $bridge,
-                'series' => $analytics->interfaceSeries($session?->id, $bridge, $window['start'], $window['end']),
+                'series' => $analytics->interfaceSeries($session?->id, $bridge, $window['chart_start'], $window['end']),
             ],
             'logs' => fn () => $analytics->recentLogs($session?->id, $window['start'], $window['end'], 8),
             'events' => fn () => $analytics->recentEvents($session?->id, $window['start'], $window['end'], 5),

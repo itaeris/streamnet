@@ -1,9 +1,9 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import MenuPanel from './MenuPanel.vue';
-import { live, pinned, rangeMinutes, ranges, refreshId, refreshes, useBoardTime } from '../composables/useBoardTime';
+import { live, liveSpan, liveSpans, pinned, rangeMinutes, ranges, refreshId, refreshes, useBoardTime } from '../composables/useBoardTime';
 
-const { selectRange, selectRefresh, setLive, shiftWindow, zoomOut, refreshNow } = useBoardTime();
+const { selectRange, selectLiveSpan, selectRefresh, setLive, shiftWindow, zoomOut, refreshNow } = useBoardTime();
 const root = ref(null);
 const rangeOpen = ref(false);
 const refreshOpen = ref(false);
@@ -102,20 +102,32 @@ onBeforeUnmount(() => {
 
 <template>
     <div ref="root" class="flex items-center gap-1">
-        <div class="relative" :class="live ? 'opacity-40' : ''">
+        <div v-if="live" class="flex items-center rounded-full bg-well p-0.5">
+            <button
+                v-for="item in liveSpans"
+                :key="item.minutes"
+                type="button"
+                class="rounded-full px-2.5 py-1 font-mono text-[11px]"
+                :class="item.minutes === liveSpan ? 'bg-panel text-paper shadow-sm' : 'text-mist hover:text-paper'"
+                @click="selectLiveSpan(item.minutes)"
+            >
+                {{ item.label }}
+            </button>
+        </div>
+        <div v-else class="relative">
         <div class="flex items-center rounded-full bg-well p-0.5">
-            <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" v-tip="'Mundur satu rentang'" :disabled="live" @click="shiftWindow(-1)">
+            <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" v-tip="'Mundur satu rentang'" @click="shiftWindow(-1)">
                 <Icon class="text-[16px]" name="chevron_left" />
             </button>
-            <button type="button" class="flex max-w-44 items-center gap-1 rounded-full px-2 py-1 text-mist hover:bg-hover hover:text-paper disabled:hover:bg-transparent" :aria-expanded="rangeOpen" :disabled="live" v-tip="live ? 'Live mengabaikan rentang waktu' : 'Rentang waktu'" @click="toggleRange">
+            <button type="button" class="flex max-w-44 items-center gap-1 rounded-full px-2 py-1 text-mist hover:bg-hover hover:text-paper" :aria-expanded="rangeOpen" v-tip="'Rentang waktu'" @click="toggleRange">
                 <Icon class="text-[15px]" name="schedule" />
                 <span class="truncate font-mono text-[11px]">{{ rangeLabel }}</span>
                 <Icon class="text-[16px] transition-transform duration-200" :class="rangeOpen ? 'rotate-180' : ''" name="expand_more" />
             </button>
-            <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" v-tip="'Maju satu rentang'" :disabled="live || !pinned" @click="shiftWindow(1)">
+            <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" v-tip="'Maju satu rentang'" :disabled="!pinned" @click="shiftWindow(1)">
                 <Icon class="text-[16px]" name="chevron_right" />
             </button>
-            <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" v-tip="'Perlebar rentang'" :disabled="live || !canZoomOut" @click="zoomOut">
+            <button type="button" class="hidden rounded-full p-1 text-mist hover:bg-hover hover:text-paper disabled:opacity-30 lg:inline-flex" v-tip="'Perlebar rentang'" :disabled="!canZoomOut" @click="zoomOut">
                 <Icon class="text-[16px]" name="zoom_out" />
             </button>
         </div>
