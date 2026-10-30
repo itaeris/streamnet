@@ -15,8 +15,6 @@ const props = defineProps({
 const page = usePage();
 const board = useBoardPulse();
 const live = computed(() => board.value ?? props.pulse);
-const shownClients = 3;
-const shownDevices = 8;
 
 const wan = computed(() => live.value?.wan ?? null);
 const identity = computed(() => live.value?.system?.identity || live.value?.session_name || 'MikroTik');
@@ -314,15 +312,10 @@ function onPointerUp() {
                                 <template v-if="(clientsByAp[ap.id] || []).length">
                                     <div class="stem" />
                                     <ul class="branch">
-                                        <li v-for="client in (clientsByAp[ap.id] || []).slice(0, shownClients)" :key="client.id || client.mac" class="leaf">
+                                        <li v-for="client in (clientsByAp[ap.id] || [])" :key="client.id || client.mac" class="leaf">
                                             <article class="topo-chip" :title="clientName(client)">
                                                 <span class="size-1.5 shrink-0 rounded-full bg-ok" />
                                                 <span class="text-xs font-medium whitespace-nowrap">{{ clientName(client) }}</span>
-                                            </article>
-                                        </li>
-                                        <li v-if="(clientsByAp[ap.id] || []).length > shownClients" class="leaf">
-                                            <article class="topo-chip text-xs text-mute">
-                                                +{{ (clientsByAp[ap.id] || []).length - shownClients }}
                                             </article>
                                         </li>
                                     </ul>
@@ -334,7 +327,7 @@ function onPointerUp() {
                 <template v-if="wired.length">
                     <div class="stem" />
                     <ul class="branch">
-                        <li v-for="lease in wired.slice(0, shownDevices)" :key="lease.address + lease.mac" class="leaf">
+                        <li v-for="lease in wired" :key="lease.address + lease.mac" class="leaf">
                             <article class="topo-chip">
                                 <span class="size-1.5 shrink-0 rounded-full" :class="busy(lease) ? 'bg-cyan' : 'bg-ok'" />
                                 <span class="min-w-0">
@@ -342,11 +335,6 @@ function onPointerUp() {
                                     <span v-if="leaseName(lease) !== lease.address" class="block font-mono text-[10px] whitespace-nowrap text-mute">{{ lease.address }}</span>
                                     <span v-if="busy(lease)" class="block font-mono text-[10px] whitespace-nowrap text-cyan">↓ {{ rate(lease.rx_bps) }}</span>
                                 </span>
-                            </article>
-                        </li>
-                        <li v-if="wired.length > shownDevices" class="leaf">
-                            <article class="topo-chip justify-center text-xs text-mute">
-                                +{{ wired.length - shownDevices }}
                             </article>
                         </li>
                     </ul>
