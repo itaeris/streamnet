@@ -69,6 +69,7 @@ const links = [
     { href: '/topology', label: 'Topology Map', icon: 'lan' },
     { href: '/bandwidth-policy', label: 'Bandwidth Policy', icon: 'gauge' },
     { href: '/security', label: 'Firewall & Security', icon: 'shield' },
+    { href: '/agent', label: 'Agen Trafik', icon: 'search' },
     { href: '/logs', label: 'Log Stream', icon: 'receipt_long' },
 ];
 
@@ -82,6 +83,7 @@ const titles = {
     '/topology': 'Topology',
     '/bandwidth-policy': 'Bandwidth Policy',
     '/security': 'Firewall',
+    '/agent': 'Agen Trafik',
     '/logs': 'Log Stream',
     '/pengaturan': 'Pengaturan',
     '/pengaturan/sesi': 'Pengaturan',

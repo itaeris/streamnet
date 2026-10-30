@@ -34,6 +34,7 @@ class PreferLiveWindow
             'dns-filter',
             'logs',
             'security',
+            'agent',
             'topology',
             'pengaturan',
             'pengaturan/sesi',
@@ -52,6 +53,6 @@ class PreferLiveWindow
 
         $rest = trim(substr($path, strlen($site)), '/');
 
-        return $rest === '' || in_array($rest, ['bandwidth', 'dhcp', 'dns', 'dns-filter', 'logs', 'security', 'topology'], true);
+        return $rest === '' || in_array($rest, ['bandwidth', 'dhcp', 'dns', 'dns-filter', 'logs', 'security', 'agent', 'topology'], true);
     }
 }

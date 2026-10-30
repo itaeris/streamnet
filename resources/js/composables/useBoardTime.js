@@ -19,7 +19,7 @@ export const liveSpans = [
     { minutes: 43200, label: '30 hari' },
 ];
 
-export const boardPaths = ['/', '/bandwidth', '/dhcp', '/dns', '/dns-filter', '/logs', '/security', '/topology', '/pengaturan', '/pengaturan/sesi', '/pengaturan/unifi', '/pengaturan/pengguna'];
+export const boardPaths = ['/', '/bandwidth', '/dhcp', '/dns', '/dns-filter', '/logs', '/security', '/agent', '/topology', '/pengaturan', '/pengaturan/sesi', '/pengaturan/unifi', '/pengaturan/pengguna'];
 
 export function barePath(url, slug = '') {
     const path = String(url || '').split('?')[0] || '/';
@@ -101,6 +101,7 @@ const liveProps = {
     '/bandwidth-policy': ['incidents'],
     '/logs': ['logs'],
     '/security': ['events'],
+    '/agent': [],
     '/pengaturan': [],
     '/pengaturan/sesi': ['sessions'],
     '/pengaturan/unifi': [],

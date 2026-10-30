@@ -13,6 +13,7 @@ use App\Models\SecurityEvent;
 use App\Models\SystemSample;
 use App\Services\DnsActivity;
 use App\Services\DnsFilterSchedule;
+use App\Services\TrafficAgent;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -141,6 +142,7 @@ class MikrotikPoller
                 $this->attachHostRates($payload['leases'], $batch['host_traffic']),
                 $this->delivered->latest($session->id),
             );
+            $payload['agent'] = app(TrafficAgent::class)->analyze($this->rows($batch['host_traffic']), $this->leaseNames($payload['leases']), $this->leaseClients($payload['leases']));
         }
         $payload['interfaces'] = array_map(fn (array $row) => [
             'name' => $row['name'],
@@ -344,6 +346,7 @@ class MikrotikPoller
                 $this->storeQueueSamples($shaping['queues'] ?? [], $sampledAt);
             }
             $this->trackBandwidthHogs($leases, is_array($shaping) ? $shaping : null, $sampledAt, $batch['host_traffic'] ?? null);
+            $agent = app(TrafficAgent::class)->analyze($this->rows($batch['host_traffic'] ?? null), $this->leaseNames($leases), $this->leaseClients($leases));
 
             $leaseSummary = [
                 'total' => count($leases),
@@ -383,6 +386,7 @@ class MikrotikPoller
                 'lease_summary' => $leaseSummary,
                 'logs' => array_slice($logs, 0, 40),
                 'shaping' => $shaping,
+                'agent' => $agent,
                 'security' => [
                     'connections' => $connections,
                     'sessions' => $sessions,
@@ -681,6 +685,55 @@ class MikrotikPoller
         }
 
         return $leases;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $leases
+     * @return array<string, string>
+     */
+    private function leaseNames(array $leases): array
+    {
+        $names = [];
+        foreach ($leases as $lease) {
+            $address = $this->hostAddress($lease['address'] ?? '');
+            $label = trim((string) (($lease['comment'] ?? '') ?: ($lease['host'] ?? '')));
+            if ($address !== '' && $label !== '') {
+                $names[$address] = $label;
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $leases
+     * @return array<int, array{address: string, name: string|null, mac: string|null, down: int, up: int}>
+     */
+    private function leaseClients(array $leases): array
+    {
+        $clients = [];
+        foreach ($leases as $lease) {
+            if (! is_array($lease)) {
+                continue;
+            }
+
+            $address = $this->hostAddress($lease['address'] ?? '');
+            if ($address === '') {
+                continue;
+            }
+
+            $label = trim((string) (($lease['comment'] ?? '') ?: ($lease['host'] ?? '')));
+            $mac = trim((string) ($lease['mac'] ?? ''));
+            $clients[] = [
+                'address' => $address,
+                'name' => $label !== '' ? $label : null,
+                'mac' => $mac !== '' ? $mac : null,
+                'down' => (int) ($lease['rx_bps'] ?? 0),
+                'up' => (int) ($lease['tx_bps'] ?? 0),
+            ];
+        }
+
+        return $clients;
     }
 
     private function hostAddress(mixed $value): string

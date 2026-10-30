@@ -55,6 +55,7 @@ class BindSiteSession
             'dns-filter',
             'logs',
             'security',
+            'agent',
             'access-points',
             'bandwidth-policy',
             'topology',

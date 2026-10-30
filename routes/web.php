@@ -13,6 +13,7 @@ use App\Http\Controllers\MikrotikSessionController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\SiteLogoController;
 use App\Http\Controllers\TopologyController;
+use App\Http\Controllers\TrafficAgentController;
 use App\Http\Controllers\UnifiSettingsController;
 use App\Http\Controllers\UserController;
 use App\Services\Mikrotik\CurrentMikrotikSession;
@@ -52,6 +53,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/bandwidth-policy/incidents/export', [BandwidthPolicyController::class, 'export'])->name('bandwidth-policy.export');
     Route::get('/logs', LogController::class);
     Route::get('/security', SecurityController::class);
+    Route::get('/agent', TrafficAgentController::class);
     Route::get('/pengaturan', [MikrotikSessionController::class, 'account'])->name('settings');
     Route::get('/pengaturan/sesi', fn () => redirect()->route('sites'))->name('settings.sessions');
     Route::put('/pengaturan/password', [LoginController::class, 'updatePassword'])->name('settings.password');
@@ -84,5 +86,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/bandwidth-policy', [BandwidthPolicyController::class, 'index'])->name('bandwidth-policy');
         Route::get('/logs', LogController::class)->name('logs');
         Route::get('/security', SecurityController::class)->name('security');
+        Route::get('/agent', TrafficAgentController::class)->name('agent');
     });
 });
