@@ -386,11 +386,11 @@ const dotClass = computed(() => {
                         v-for="link in links"
                         :key="link.href"
                         :href="hrefFor(link.href)"
-                        class="flex items-center gap-3 rounded-lg py-2.5 text-sm transition"
+                        class="flex items-center gap-2.5 rounded-lg py-2 text-[13px] transition"
                         :class="[collapsed ? 'justify-center px-0' : 'px-3', current === link.href ? 'bg-cyan-2 font-semibold text-[#003640]' : 'text-mist hover:bg-tile hover:text-paper']"
                         v-tip:right="collapsed ? link.label : ''"
                     >
-                        <Icon class="text-[20px]" :name="link.icon" />
+                        <Icon class="text-[18px]" :name="link.icon" />
                         <span v-if="!collapsed">{{ link.label }}</span>
                     </Link>
                 </nav>

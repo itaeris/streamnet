@@ -23,7 +23,7 @@ use Inertia\Response;
 
 class MikrotikSessionController extends Controller
 {
-    public function sites(): Response
+    public function sites(AnalyticsQuery $analytics): Response
     {
         $sessions = MikrotikSession::query()->orderBy('name')->orderBy('id')->get();
         $pulses = LiveSnapshot::query()
@@ -38,8 +38,9 @@ class MikrotikSessionController extends Controller
             ->all();
 
         return Inertia::render('Sites', [
-            'sessions' => $sessions->map(function (MikrotikSession $session) use ($pulses, $connected) {
+            'sessions' => $sessions->map(function (MikrotikSession $session) use ($pulses, $connected, $analytics) {
                 $payload = $pulses->get($session->id)?->payload ?? [];
+                $wan = $payload['wan']['name'] ?? $session->wan_interface;
 
                 return [
                     'id' => $session->id,
@@ -49,7 +50,11 @@ class MikrotikSessionController extends Controller
                     'enabled' => $session->enabled,
                     'online' => (bool) ($payload['online'] ?? false),
                     'identity' => $payload['system']['identity'] ?? null,
+                    'board' => $payload['system']['board'] ?? null,
                     'sampled_label' => $payload['sampled_label'] ?? null,
+                    'rx' => $payload['wan']['rx_bps'] ?? null,
+                    'tx' => $payload['wan']['tx_bps'] ?? null,
+                    'series' => $analytics->interfaceSeries($session->id, is_string($wan) ? $wan : null, now()->subHours(6), now(), 48),
                     'unifi' => in_array($session->id, $connected, true),
                 ];
             })->values(),

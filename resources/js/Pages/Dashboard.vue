@@ -418,11 +418,11 @@ const visibleIfaces = (live, query) => {
                     </div>
                     <ul v-if="events.length" class="mt-2 space-y-2">
                         <li v-for="(event, index) in events" :key="`${event.time}-${event.title}-${index}`">
-                            <p class="text-sm">
+                            <p class="text-[13px]">
                                 <span class="mr-1 font-mono text-[10px] uppercase" :class="event.severity === 'critical' ? 'text-danger' : 'text-warn'">{{ event.severity }}</span>
                                 {{ event.title }}
                             </p>
-                            <p class="font-mono text-[11px] text-mute">{{ event.time }} · {{ event.detail }}</p>
+                            <p class="font-mono text-[10px] text-mute">{{ event.time }} · {{ event.detail }}</p>
                         </li>
                     </ul>
                     <p v-else class="mt-2 font-mono text-[11px] text-mute">{{ boardLive ? 'Tidak ada kejadian.' : 'Tidak ada kejadian pada rentang ini.' }}</p>
@@ -434,8 +434,8 @@ const visibleIfaces = (live, query) => {
                     </div>
                     <ul class="mt-2 space-y-2">
                         <li v-for="entry in logs" :key="entry.id">
-                            <p class="font-mono text-[11px] text-mute">{{ entry.time }} · {{ entry.topics }}</p>
-                            <p class="text-sm break-words">{{ entry.message }}</p>
+                            <p class="font-mono text-[10px] text-mute">{{ entry.time }} · {{ entry.topics }}</p>
+                            <p class="text-[13px] break-words">{{ entry.message }}</p>
                         </li>
                         <li v-if="!logs.length" class="font-mono text-[11px] text-mute">Menunggu log.</li>
                     </ul>
