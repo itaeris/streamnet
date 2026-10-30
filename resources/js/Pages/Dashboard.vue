@@ -456,7 +456,7 @@ const visibleIfaces = (live, query) => {
                     <li v-for="app in appBars" :key="app.name">
                         <div class="flex items-center justify-between gap-3">
                             <span class="flex min-w-0 items-center gap-2">
-                                <SiteMark :domain="app.site || ''" :label="app.name" />
+                                <SiteMark :domain="app.site || ''" :domains="app.hosts" :label="app.name" />
                                 <span class="min-w-0">
                                     <span class="block truncate text-sm font-medium">{{ app.name }}</span>
                                     <span class="block font-mono text-[10px] text-mute">{{ Number(app.queries).toLocaleString('id-ID') }} query</span>

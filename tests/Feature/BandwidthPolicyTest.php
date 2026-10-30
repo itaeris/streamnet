@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\LiveSnapshot;
 use App\Models\MikrotikSession;
+use App\Models\QueueSample;
 use App\Models\SecurityEvent;
 use App\Models\User;
 use App\Services\Mikrotik\MikrotikPoller;
@@ -87,6 +88,9 @@ class BandwidthPolicyTest extends TestCase
         $this->assertSame(150000000, $payload['shaping']['main']['rate_down']);
         $this->assertSame(68, $payload['shaping']['main']['users_down']);
         $this->assertSame('*6', $payload['shaping']['down_type']['id']);
+        $this->assertSame(4, QueueSample::query()->where('name', 'TOTAL-INTERNET')->count());
+        $this->assertSame(150000000, (int) QueueSample::query()->where('name', 'TOTAL-INTERNET')->value('rx_bps'));
+        $this->assertSame(1000000, (int) QueueSample::query()->where('name', 'TOTAL-INTERNET')->value('tx_bps'));
         $this->assertFalse($payload['shaping']['fasttrack']);
 
         $events = SecurityEvent::query()->where('category', 'bandwidth')->get();

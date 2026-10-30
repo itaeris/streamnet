@@ -35,6 +35,21 @@ class DnsActivityTest extends TestCase
         $this->assertSame('youtube.com', $dns->website('YouTube'));
         $this->assertSame('instagram.com', $dns->website('Instagram'));
         $this->assertSame('microsoft.com', $dns->website('Microsoft'));
+        $this->assertSame('whatsapp.com', $dns->website('WhatsApp'));
+    }
+
+    public function test_it_picks_a_logo_host_from_the_queried_domains(): void
+    {
+        $hosts = (new DnsActivity)->logoHosts([
+            'web.whatsapp.com' => 5520,
+            'mmx-ds.cdn.whatsapp.net' => 3216,
+            'g.whatsapp.net' => 1314,
+            'www.whatsapp.com' => 213,
+        ], 'whatsapp.net');
+
+        $this->assertSame('web.whatsapp.com', $hosts[0]);
+        $this->assertNotContains('mmx-ds.cdn.whatsapp.net', $hosts);
+        $this->assertNotContains('g.whatsapp.net', $hosts);
     }
 
     public function test_it_ignores_reverse_lookups(): void

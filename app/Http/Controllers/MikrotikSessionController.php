@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DhcpLease;
 use App\Models\InterfaceSample;
 use App\Models\LiveSnapshot;
+use App\Models\QueueSample;
 use App\Models\MikrotikSession;
 use App\Models\RouterLog;
 use App\Models\SecurityEvent;
@@ -123,6 +124,7 @@ class MikrotikSessionController extends Controller
             LiveSnapshot::query()->where('mikrotik_session_id', $mikrotikSession->id)->delete();
             SystemSample::query()->where('mikrotik_session_id', $mikrotikSession->id)->delete();
             InterfaceSample::query()->where('mikrotik_session_id', $mikrotikSession->id)->delete();
+            QueueSample::query()->where('mikrotik_session_id', $mikrotikSession->id)->delete();
             DhcpLease::query()->where('mikrotik_session_id', $mikrotikSession->id)->delete();
             RouterLog::query()->where('mikrotik_session_id', $mikrotikSession->id)->delete();
             SecurityEvent::query()->where('mikrotik_session_id', $mikrotikSession->id)->delete();

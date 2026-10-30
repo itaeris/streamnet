@@ -5,6 +5,7 @@ namespace App\Services\Mikrotik;
 use App\Models\DhcpLease;
 use App\Models\DnsQuery;
 use App\Models\InterfaceSample;
+use App\Models\QueueSample;
 use App\Models\LiveSnapshot;
 use App\Models\MikrotikSession;
 use App\Models\RouterLog;
@@ -338,6 +339,9 @@ class MikrotikPoller
             $shaping = $batch['queues'] === null || $batch['queue_types'] === null
                 ? ($previousPayload['shaping'] ?? null)
                 : $this->mapShaping($batch['queues'], $batch['queue_types'], $batch['filter'] ?? null);
+            if (is_array($batch['queues']) && is_array($shaping)) {
+                $this->storeQueueSamples($shaping['queues'] ?? [], $sampledAt);
+            }
             $this->trackBandwidthHogs($leases, is_array($shaping) ? $shaping : null, $sampledAt, $batch['host_traffic'] ?? null);
 
             $leaseSummary = [
@@ -1492,10 +1496,39 @@ class MikrotikPoller
         }
     }
 
+    /**
+     * @param  array<int, array<string, mixed>>  $queues
+     */
+    private function storeQueueSamples(array $queues, Carbon $sampledAt): void
+    {
+        $rows = [];
+        foreach ($queues as $queue) {
+            $name = (string) ($queue['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+
+            $rows[] = [
+                'mikrotik_session_id' => $this->router->id,
+                'sampled_at' => $sampledAt,
+                'name' => $name,
+                'rx_bps' => (int) ($queue['rate_down'] ?? 0),
+                'tx_bps' => (int) ($queue['rate_up'] ?? 0),
+                'created_at' => $sampledAt,
+                'updated_at' => $sampledAt,
+            ];
+        }
+
+        if ($rows !== []) {
+            QueueSample::query()->insert($rows);
+        }
+    }
+
     private function prune(): void
     {
         SystemSample::query()->where('sampled_at', '<', now()->subHours(48))->delete();
         InterfaceSample::query()->where('sampled_at', '<', now()->subDays(30))->delete();
+        QueueSample::query()->where('sampled_at', '<', now()->subDays(30))->delete();
         RouterLog::query()->where('logged_at', '<', now()->subDays(14))->delete();
         DnsQuery::query()->where('logged_at', '<', now()->subDays(7))->delete();
         SecurityEvent::query()->where('occurred_at', '<', now()->subDays(30))->delete();

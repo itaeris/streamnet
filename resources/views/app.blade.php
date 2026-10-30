@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <title inertia>{{ config('app.name', 'StreamNet') }}</title>
-        <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+        <link rel="icon" href="{{ asset('favicon.svg') }}?v=2" type="image/svg+xml">
         <script>
             try {
                 if (localStorage.getItem('theme') === 'light') {

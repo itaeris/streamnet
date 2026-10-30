@@ -260,14 +260,68 @@ class DnsActivity
                         $brand = 0;
                     }
                 }
+                $tld = substr(strrchr($site, '.') ?: '', 1);
 
-                return [$brand, strlen($site)];
+                return [$brand, $tld === 'com' ? 0 : 1, strlen($site)];
             };
 
             return $score($left) <=> $score($right);
         });
 
         return $sites[0];
+    }
+
+    /**
+     * Hosts worth asking for a favicon, taken from the domains that were actually queried.
+     * Infrastructure names (CDN, API, media) are skipped because they rarely serve an icon.
+     *
+     * @param  array<string, int>  $counts
+     * @return array<int, string>
+     */
+    public function logoHosts(array $counts, ?string $fallback = null): array
+    {
+        $ranked = [];
+        foreach ($counts as $domain => $count) {
+            $host = strtolower(rtrim((string) $domain, '.'));
+            if ($host === '' || str_contains($host, 'in-addr.arpa') || $this->infraHost($host)) {
+                continue;
+            }
+            $ranked[$host] = ($ranked[$host] ?? 0) + (int) $count;
+        }
+
+        uksort($ranked, function (string $left, string $right) use ($ranked): int {
+            return [$this->logoScore($right), $ranked[$right]] <=> [$this->logoScore($left), $ranked[$left]];
+        });
+
+        $hosts = array_keys($ranked);
+        if ($fallback) {
+            $hosts[] = strtolower($fallback);
+        }
+
+        return array_slice(array_values(array_unique($hosts)), 0, 5);
+    }
+
+    private function logoScore(string $host): int
+    {
+        $labels = explode('.', $host);
+        $head = $labels[0];
+        if ($head === 'web' || $head === 'www') {
+            return 2;
+        }
+
+        return count($labels) === 2 ? 1 : 0;
+    }
+
+    private function infraHost(string $host): bool
+    {
+        if (str_starts_with($host, '_') || str_contains($host, '.cdn.') || str_contains($host, '.fna.')) {
+            return true;
+        }
+
+        $head = explode('.', $host)[0];
+
+        return in_array($head, ['cdn', 'static', 'api', 'media', 'dit', 'graph', 'g', 'v', 'mmg', 'pps', 'crashlogs', 'g-fallback', 'webtp', 'flows'], true)
+            || str_starts_with($head, 'media-');
     }
 
     /**

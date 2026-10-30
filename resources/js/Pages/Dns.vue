@@ -95,6 +95,49 @@ function registrable(domain) {
     return publicSuffixes.has(tail) ? parts.slice(-3).join('.') : tail;
 }
 
+function infraHost(host) {
+    if (host.startsWith('_') || host.includes('.cdn.') || host.includes('.fna.')) {
+        return true;
+    }
+
+    const head = host.split('.')[0];
+
+    return ['cdn', 'static', 'api', 'media', 'dit', 'graph', 'g', 'v', 'mmg', 'pps', 'crashlogs', 'g-fallback', 'webtp', 'flows'].includes(head)
+        || head.startsWith('media-');
+}
+
+function iconHosts(domains, mapped = '') {
+    const counts = new Map();
+    for (const row of domains ?? []) {
+        const host = String(row.domain || row[0] || '').toLowerCase().replace(/\.$/, '');
+        const queries = Number(row.queries ?? row[1]) || 1;
+        if (!host || host.includes('in-addr.arpa') || infraHost(host)) {
+            continue;
+        }
+        counts.set(host, (counts.get(host) || 0) + queries);
+    }
+
+    const score = (host) => {
+        const labels = host.split('.');
+        const head = labels[0];
+        if (head === 'web' || head === 'www') {
+            return 2;
+        }
+
+        const tail = labels.slice(-2).join('.');
+
+        return labels.length === 2 || (labels.length === 3 && publicSuffixes.has(tail)) ? 1 : 0;
+    };
+    const hosts = [...counts.entries()]
+        .sort((left, right) => score(right[0]) - score(left[0]) || right[1] - left[1])
+        .map(([host]) => host);
+    if (mapped) {
+        hosts.push(String(mapped).toLowerCase());
+    }
+
+    return [...new Set(hosts.filter(Boolean))].slice(0, 5);
+}
+
 function rank(rows, nameOf, siteOf) {
     const groups = new Map();
 
@@ -121,26 +164,38 @@ function rank(rows, nameOf, siteOf) {
     });
 
     return [...groups.values()]
-        .map((item) => ({
-            name: item.name,
-            users: item.users.size,
-            addresses: [...item.users],
-            queries: item.queries,
-            last: item.last,
-            site: [...item.sites.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || '',
-            domains: [...item.domains.entries()]
+        .map((item) => {
+            const ordered = [...item.domains.entries()]
                 .sort((left, right) => right[1] - left[1])
-                .slice(0, 12)
-                .map(([domain, queries]) => ({ domain, queries })),
-        }))
+                .map(([domain, queries]) => ({ domain, queries }));
+
+            return {
+                name: item.name,
+                users: item.users.size,
+                addresses: [...item.users],
+                queries: item.queries,
+                last: item.last,
+                site: [...item.sites.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || '',
+                domains: ordered.slice(0, 12),
+                logoDomains: ordered.slice(0, 40),
+            };
+        })
         .sort((left, right) => right.users - left.users || right.queries - left.queries);
 }
 
 const apps = computed(() => rank(
     entries.value,
     (row) => row.app || '',
-    (row) => props.appSites?.[row.app] || registrable(row.domain),
-));
+    (row) => registrable(row.domain),
+).map((item) => {
+    const hosts = iconHosts(item.logoDomains, props.appSites?.[item.name] || '');
+
+    return {
+        ...item,
+        hosts,
+        site: hosts[0] || item.site,
+    };
+}));
 const browsers = computed(() => rank(
     entries.value,
     (row) => row.browser || '',
@@ -309,7 +364,7 @@ const deviceLabel = (row) => row.host || row.address || '';
                 :class="isOpen(`dns-apps:${app.name}`) ? 'bg-active' : ''"
                 @click="open(rankPreview(app, 'apps'))"
             >
-                <SiteMark :domain="app.site" :label="app.name" />
+                <SiteMark :domain="app.site" :domains="app.hosts" :label="app.name" />
                 <span class="min-w-0">
                     <span class="block truncate text-sm font-medium">{{ app.name }}</span>
                     <span class="block font-mono text-[10px] text-mute">{{ app.users }} pengguna</span>
@@ -345,7 +400,7 @@ const deviceLabel = (row) => row.host || row.address || '';
                         >
                             <td class="px-3 py-2">
                                 <span class="flex items-center gap-2">
-                                    <SiteMark :domain="item.site" :label="item.name" />
+                                    <SiteMark :domain="item.site" :domains="item.hosts" :label="item.name" />
                                     <span class="min-w-0">
                                         <span class="block truncate font-medium">{{ item.name }}</span>
                                     </span>
@@ -394,7 +449,7 @@ const deviceLabel = (row) => row.host || row.address || '';
                             <td class="px-3 py-2 font-mono text-[11px]" :class="device.browser ? 'text-ok' : 'text-mute'">{{ device.browser || '–' }}</td>
                             <td class="px-3 py-2">
                                 <span class="flex items-center gap-2">
-                                    <SiteMark v-if="device.app" :domain="siteForApp(device.app)" :label="device.app" />
+                                    <SiteMark v-if="device.app" :domain="siteForApp(device.app)" :domains="apps.find((item) => item.name === device.app)?.hosts" :label="device.app" />
                                     <span>{{ device.app || '–' }}</span>
                                 </span>
                             </td>

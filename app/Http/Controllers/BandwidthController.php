@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\InterfaceSample;
+use App\Models\QueueSample;
 use App\Services\AnalyticsQuery;
 use App\Services\Mikrotik\CurrentMikrotikSession;
 use Illuminate\Http\Request;
@@ -26,6 +27,15 @@ class BandwidthController extends Controller
                 ->pluck('name');
         }
 
+        $queues = collect($pulse['shaping']['queues'] ?? [])->pluck('name')->filter()->values();
+        if ($queues->isEmpty()) {
+            $queues = QueueSample::query()
+                ->where('mikrotik_session_id', $session?->id)
+                ->distinct()
+                ->orderBy('name')
+                ->pluck('name');
+        }
+
         return Inertia::render('Bandwidth', [
             'pulse' => $pulse,
             'minutes' => $window['minutes'],
@@ -33,6 +43,7 @@ class BandwidthController extends Controller
             'to' => $window['to'],
             'live' => $window['live'],
             'series' => fn () => $analytics->interfaceSeriesMap($session?->id, $names->all(), $window['chart_start'], $window['end']),
+            'queues' => fn () => $analytics->queueSeriesMap($session?->id, $queues->all(), $window['chart_start'], $window['end']),
         ]);
     }
 }

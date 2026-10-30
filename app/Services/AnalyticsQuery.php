@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\DnsQuery;
 use App\Models\InterfaceSample;
+use App\Models\QueueSample;
 use App\Models\LiveSnapshot;
 use App\Models\RouterLog;
 use App\Models\SecurityEvent;
@@ -146,6 +147,34 @@ class AnalyticsQuery
     }
 
     /**
+     * @param  array<int, string>  $names
+     * @return array<string, array<int, array{t: string, ts: int, rx: int, tx: int}>>
+     */
+    public function queueSeriesMap(?int $sessionId, array $names, Carbon $start, Carbon $end, int $maxPoints = 240): array
+    {
+        if ($sessionId === null || $names === []) {
+            return [];
+        }
+
+        $query = QueueSample::query()
+            ->where('mikrotik_session_id', $sessionId)
+            ->whereIn('name', $names)
+            ->whereBetween('sampled_at', [$start, $end]);
+
+        $bucket = $this->bucketSeconds($start, $end, $maxPoints);
+        if ($bucket > 0) {
+            return $this->bucketed($query, $start, $bucket, true);
+        }
+
+        $rows = $query->orderBy('sampled_at')->toBase()->get(['name', 'sampled_at', 'rx_bps', 'tx_bps']);
+
+        return $rows
+            ->groupBy('name')
+            ->map(fn (Collection $group) => $this->downsample($group, $maxPoints, $start, $end))
+            ->all();
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function recentLogs(?int $sessionId, Carbon $start, Carbon $end, int $limit = 200): array
@@ -210,12 +239,33 @@ class AnalyticsQuery
             ->limit($limit)
             ->get();
 
-        return $rows->map(fn (object $row) => [
-            'name' => (string) $row->app,
-            'site' => $sites->website((string) $row->app),
-            'users' => (int) $row->users,
-            'queries' => (int) $row->queries,
-        ])->all();
+        $names = $rows->pluck('app')->filter()->values();
+        $counts = $names->isEmpty() ? collect() : DnsQuery::query()
+            ->where('mikrotik_session_id', $sessionId)
+            ->whereBetween('logged_at', [$start, $end])
+            ->whereIn('app', $names)
+            ->select('app', 'domain')
+            ->selectRaw('COUNT(*) as queries')
+            ->groupBy('app', 'domain')
+            ->get()
+            ->groupBy('app');
+
+        return $rows->map(function (object $row) use ($sites, $counts) {
+            $name = (string) $row->app;
+            $seen = [];
+            foreach ($counts->get($name, []) as $domain) {
+                $seen[(string) $domain->domain] = (int) $domain->queries;
+            }
+            $hosts = $sites->logoHosts($seen, $sites->website($name));
+
+            return [
+                'name' => $name,
+                'site' => $hosts[0] ?? null,
+                'hosts' => $hosts,
+                'users' => (int) $row->users,
+                'queries' => (int) $row->queries,
+            ];
+        })->all();
     }
 
     /**
