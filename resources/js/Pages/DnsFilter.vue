@@ -380,12 +380,12 @@ function remove(domain) {
             </span>
         </template>
         <template #schedule="{ row }">
-            <button type="button" class="font-mono text-[11px] text-cyan" @click.stop="editSchedule(row)">
+            <button type="button" class="inline-flex h-7 cursor-pointer items-center rounded-full bg-tile px-2.5 text-[11px] font-semibold text-paper transition hover:brightness-110 active:scale-[0.99]" @click.stop="editSchedule(row)">
                 {{ windowsOf(row.domain).length ? `${windowsOf(row.domain).length} jam` : 'Atur' }}
             </button>
         </template>
         <template #remove="{ row }">
-            <button type="button" class="font-mono text-[11px] text-danger disabled:opacity-50" :disabled="removing === row.domain" @click.stop="remove(row.domain)">
+            <button type="button" class="inline-flex h-7 cursor-pointer items-center rounded-full bg-danger/15 px-2.5 text-[11px] font-semibold text-danger transition hover:brightness-110 active:scale-[0.99] disabled:opacity-50" :disabled="removing === row.domain" @click.stop="remove(row.domain)">
                 {{ removing === row.domain ? 'Menghapus…' : 'Hapus' }}
             </button>
         </template>
