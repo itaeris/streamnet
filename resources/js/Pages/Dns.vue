@@ -104,9 +104,15 @@ function rank(rows, nameOf, siteOf) {
             return;
         }
 
-        const current = groups.get(name) ?? { name, users: new Set(), queries: 0, sites: new Map() };
+        const current = groups.get(name) ?? { name, users: new Set(), queries: 0, sites: new Map(), domains: new Map(), last: '' };
         current.users.add(row.address);
         current.queries += 1;
+        if (row.domain) {
+            current.domains.set(row.domain, (current.domains.get(row.domain) || 0) + 1);
+        }
+        if (row.time && row.time > current.last) {
+            current.last = row.time;
+        }
         const site = siteOf(row);
         if (site) {
             current.sites.set(site, (current.sites.get(site) || 0) + 1);
@@ -118,8 +124,14 @@ function rank(rows, nameOf, siteOf) {
         .map((item) => ({
             name: item.name,
             users: item.users.size,
+            addresses: [...item.users],
             queries: item.queries,
+            last: item.last,
             site: [...item.sites.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || '',
+            domains: [...item.domains.entries()]
+                .sort((left, right) => right[1] - left[1])
+                .slice(0, 12)
+                .map(([domain, queries]) => ({ domain, queries })),
         }))
         .sort((left, right) => right.users - left.users || right.queries - left.queries);
 }
@@ -140,6 +152,7 @@ const links = computed(() => rank(
     (row) => registrable(row.domain),
 ));
 const siteForApp = (name) => apps.value.find((item) => item.name === name)?.site || '';
+const topApps = computed(() => apps.value.slice(0, 6));
 const storedTab = localStorage.getItem('dns.tab');
 const tab = ref(['apps', 'browsers', 'links', 'devices'].includes(storedTab) ? storedTab : 'apps');
 watch(tab, (value) => localStorage.setItem('dns.tab', value));
@@ -151,6 +164,16 @@ const tabOptions = computed(() => [
 ]);
 const activeRank = computed(() => (tab.value === 'browsers' ? browsers.value : tab.value === 'links' ? links.value : apps.value));
 const emptyRank = computed(() => (tab.value === 'browsers' ? 'Browser belum ketahuan.' : tab.value === 'links' ? 'Belum ada tautan.' : 'Belum ada aplikasi.'));
+
+const rankColumns = [
+    { id: 'name', type: 'text', first: 'asc', get: (row) => row.name || '' },
+    { id: 'site', type: 'text', first: 'asc', get: (row) => row.site || '' },
+    { id: 'users', type: 'number', first: 'desc', get: (row) => row.users },
+    { id: 'queries', type: 'number', first: 'desc', get: (row) => row.queries },
+];
+const rankLabels = { name: 'Nama', site: 'Situs', users: 'Pengguna', queries: 'Query' };
+const rankText = (row) => [row.name, row.site, ...row.domains.map((item) => item.domain), ...row.addresses].join(' ');
+const rankLabel = (row) => row.name || '';
 
 const columnLabels = {
     host: 'Perangkat',
@@ -194,11 +217,56 @@ function devicePreview(device) {
     };
 }
 
-function activeDevice() {
-    const key = preview.value?.key;
-    const device = devices.value.find((row) => `dns:${row.address}` === key);
+function rankPreview(item, kind) {
+    const leases = new Map((live.value?.leases ?? []).map((lease) => [lease.address, lease]));
+    const people = item.addresses.map((address) => ({
+        label: leases.get(address)?.host || address,
+        value: address,
+    }));
 
-    return device ? devicePreview(device) : null;
+    return {
+        key: `dns-${kind}:${item.name}`,
+        icon: 'language',
+        title: item.name,
+        subtitle: item.site || '',
+        detail: item.last || '',
+        status: { label: `${item.users} pengguna`, tone: 'ok' },
+        tabs: [{
+            id: 'overview',
+            icon: 'language',
+            label: 'DNS',
+            hero: true,
+            sections: [
+                { title: 'Pengguna', rows: people },
+                {
+                    title: 'Domain',
+                    rows: item.domains.map((domain) => ({
+                        label: domain.domain,
+                        value: `${domain.queries} query`,
+                    })),
+                },
+            ],
+        }],
+    };
+}
+
+function activeDevice() {
+    const key = preview.value?.key || '';
+    const device = devices.value.find((row) => `dns:${row.address}` === key);
+    if (device) {
+        return devicePreview(device);
+    }
+
+    const ranked = key.startsWith('dns-apps:')
+        ? apps.value.find((row) => `dns-apps:${row.name}` === key)
+        : key.startsWith('dns-browsers:')
+            ? browsers.value.find((row) => `dns-browsers:${row.name}` === key)
+            : key.startsWith('dns-links:')
+                ? links.value.find((row) => `dns-links:${row.name}` === key)
+                : null;
+    const kind = key.startsWith('dns-browsers:') ? 'browsers' : key.startsWith('dns-links:') ? 'links' : 'apps';
+
+    return ranked ? rankPreview(ranked, kind) : null;
 }
 
 const deviceText = (row) => [row.host, row.address, row.mac, row.browser, row.app, row.domains.join(' ')].join(' ');
@@ -230,24 +298,70 @@ const deviceLabel = (row) => row.host || row.address || '';
         </article>
     </section>
 
+    <section v-if="topApps.length" class="mt-3">
+        <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Paling sering dibuka</p>
+        <div class="mt-2 flex gap-2 overflow-x-auto pb-1">
+            <button
+                v-for="app in topApps"
+                :key="app.name"
+                type="button"
+                class="flex w-44 shrink-0 items-center gap-2.5 rounded-xl border border-edge bg-panel px-3 py-2 text-left hover:bg-hover"
+                :class="isOpen(`dns-apps:${app.name}`) ? 'bg-active' : ''"
+                @click="open(rankPreview(app, 'apps'))"
+            >
+                <SiteMark :domain="app.site" :label="app.name" />
+                <span class="min-w-0">
+                    <span class="block truncate text-sm font-medium">{{ app.name }}</span>
+                    <span class="block font-mono text-[10px] text-mute">{{ app.users }} pengguna</span>
+                </span>
+            </button>
+        </div>
+    </section>
+
     <SegmentTabs v-model="tab" class="mt-3" :options="tabOptions" />
 
-    <section v-if="tab !== 'devices'" class="noc-card mt-3 p-3">
-        <ul v-if="activeRank.length" class="divide-y divide-line">
-            <li v-for="item in activeRank" :key="item.name" class="flex items-center gap-2.5 py-2.5">
-                <SiteMark :domain="item.site" :label="item.name" />
-                <div class="min-w-0 flex-1">
-                    <p class="truncate text-sm font-medium">{{ item.name }}</p>
-                    <p v-if="item.site" class="truncate font-mono text-[10px] text-mute">{{ item.site }}</p>
-                    <p class="font-mono text-[10px] text-mute">{{ item.queries }} query</p>
-                </div>
-                <p class="shrink-0 text-right">
-                    <span class="block text-sm font-semibold">{{ item.users }}</span>
-                    <span class="block text-[10px] text-mute">pengguna</span>
-                </p>
-            </li>
-        </ul>
-        <p v-else class="py-6 text-center font-mono text-[11px] text-mute">{{ emptyRank }}</p>
+    <section v-if="tab !== 'devices'" class="noc-card mt-3 overflow-x-auto">
+        <PagedTable :rows="activeRank" :text="rankText" :label="rankLabel" :columns="rankColumns" default-sort="users" placeholder="Cari nama, situs, domain...">
+            <template #default="{ rows: pageRows, sortOf }">
+                <table class="w-full min-w-[40rem] text-left text-sm">
+                    <thead class="font-mono text-[10px] tracking-wide text-mute uppercase">
+                        <tr>
+                            <th v-for="column in rankColumns" :key="column.id" class="group p-0 font-medium">
+                                <SortHead :active="sortOf(column.id).active" :icon="sortOf(column.id).icon" @sort="sortOf(column.id).toggle()">
+                                    {{ rankLabels[column.id] }}
+                                </SortHead>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr
+                            v-for="item in pageRows"
+                            :key="item.name"
+                            tabindex="0"
+                            class="cursor-pointer border-t border-line hover:bg-hover"
+                            :class="isOpen(`dns-${tab}:${item.name}`) ? 'bg-active' : ''"
+                            @click="open(rankPreview(item, tab))"
+                            @keydown.enter.prevent="open(rankPreview(item, tab))"
+                        >
+                            <td class="px-3 py-2">
+                                <span class="flex items-center gap-2">
+                                    <SiteMark :domain="item.site" :label="item.name" />
+                                    <span class="min-w-0">
+                                        <span class="block truncate font-medium">{{ item.name }}</span>
+                                    </span>
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 font-mono text-[11px] text-mist">{{ item.site || '–' }}</td>
+                            <td class="px-3 py-2 font-mono">{{ item.users }}</td>
+                            <td class="px-3 py-2 font-mono text-mist">{{ item.queries }}</td>
+                        </tr>
+                        <tr v-if="pageRows.length === 0">
+                            <td colspan="4" class="px-3 py-8 text-center font-mono text-[11px] text-mute">{{ emptyRank }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </template>
+        </PagedTable>
     </section>
 
     <section v-else class="noc-card mt-3 overflow-x-auto">

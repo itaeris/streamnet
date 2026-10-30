@@ -62,15 +62,19 @@ class IncidentReport
             $client = $event->context['client'] ?? [];
             $address = $this->address($event);
             $detail = (string) $event->detail;
-            preg_match('/download\s+([\d.]+)\s*Mbps/i', $detail, $rate);
+            preg_match('/(?:download|upload)\s+([\d.]+)\s*Mbps/i', $detail, $rate);
             preg_match('/(\d+)%\s*kapasitas/i', $detail, $share);
+            $direction = ($client['direction'] ?? null) === 'up' || str_contains(strtolower($detail), 'upload') ? 'up' : 'down';
+            $parsed = isset($rate[1]) ? (int) round((float) $rate[1] * 1_000_000) : null;
 
             return [
                 ...$event->toPayload(),
                 'name' => $client['name'] ?? (trim(strstr($detail, ' (', true) ?: '') ?: $address),
                 'address' => $address,
                 'mac' => $client['mac'] ?? ($macs[$address] ?? null),
-                'down' => isset($client['down']) ? (int) $client['down'] : (isset($rate[1]) ? (int) round((float) $rate[1] * 1_000_000) : null),
+                'direction' => $direction,
+                'down' => isset($client['down']) ? (int) $client['down'] : ($direction === 'down' ? $parsed : null),
+                'up' => isset($client['up']) ? (int) $client['up'] : ($direction === 'up' ? $parsed : null),
                 'share' => $client['share'] ?? (isset($share[1]) ? (int) $share[1] : null),
                 'kind' => $event->context['kind'] ?? null,
             ];
@@ -88,7 +92,7 @@ class IncidentReport
         return collect($rows)
             ->groupBy(fn (array $row) => $row['address'] ?: $row['name'])
             ->map(function ($group) {
-                $rates = $group->pluck('down')->filter(fn ($value) => $value !== null);
+                $rates = $group->map(fn (array $row) => ($row['direction'] ?? 'down') === 'up' ? $row['up'] : $row['down'])->filter(fn ($value) => $value !== null);
                 $kinds = $group->pluck('kind')->filter(fn ($kind) => $kind && $kind !== 'Tidak diketahui')->countBy()->sortDesc();
                 $latest = $group->sortByDesc('time')->first();
 
@@ -145,7 +149,7 @@ class IncidentReport
         $writer->getCurrentSheet()->setColumnWidth(19, 3, 7, 8);
 
         $writer->addNewSheetAndMakeItCurrent()->setName('Insiden');
-        $writer->addRow(Row::fromValuesWithStyle(['Waktu', 'Klien', 'IP address', 'MAC address', 'Insiden', 'Download (Mbps)', 'Porsi kapasitas (%)', 'Dugaan penyebab', 'Detail'], $bold));
+        $writer->addRow(Row::fromValuesWithStyle(['Waktu', 'Klien', 'IP address', 'MAC address', 'Insiden', 'Arah', 'Download (Mbps)', 'Upload (Mbps)', 'Porsi kapasitas (%)', 'Dugaan penyebab', 'Detail'], $bold));
         foreach ($rows as $row) {
             $writer->addRow(Row::fromValues([
                 $row['time'],
@@ -153,7 +157,9 @@ class IncidentReport
                 $row['address'],
                 $row['mac'],
                 $row['title'],
+                ($row['direction'] ?? 'down') === 'up' ? 'Upload' : 'Download',
                 $mbps($row['down']),
+                $mbps($row['up']),
                 $row['share'],
                 $row['kind'],
                 $row['detail'],

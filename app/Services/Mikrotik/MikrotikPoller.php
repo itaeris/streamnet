@@ -1027,59 +1027,77 @@ class MikrotikPoller
      */
     private function trackBandwidthHogs(array $leases, ?array $shaping, Carbon $sampledAt, mixed $hostTraffic = null): void
     {
-        $capacity = (int) ($shaping['main']['max_down'] ?? 0);
-        $cap = (int) ($shaping['down_type']['rate'] ?? 0);
-        $threshold = $cap > 0 ? (int) ($cap * 0.9) : (int) ($capacity * 0.5);
-        if ($threshold <= 0) {
-            return;
-        }
+        $directions = [
+            'down' => [
+                'field' => 'rx_bps',
+                'capacity' => (int) ($shaping['main']['max_down'] ?? 0),
+                'cap' => (int) ($shaping['down_type']['rate'] ?? 0),
+                'word' => 'download',
+            ],
+            'up' => [
+                'field' => 'tx_bps',
+                'capacity' => (int) ($shaping['main']['max_up'] ?? 0),
+                'cap' => (int) ($shaping['up_type']['rate'] ?? 0),
+                'word' => 'upload',
+            ],
+        ];
 
         foreach ($leases as $lease) {
             $address = (string) ($lease['address'] ?? '');
-            $rate = (int) ($lease['rx_bps'] ?? 0);
-            $streak = "mikrotik.{$this->router->id}.hog.{$address}";
-
-            if ($address === '' || $rate < $threshold) {
-                Cache::forget($streak);
-
+            if ($address === '') {
                 continue;
             }
 
-            $count = (int) Cache::get($streak, 0) + 1;
-            Cache::put($streak, $count, 60);
-            $cooldown = "{$streak}.logged";
-            if ($count < 3 || Cache::has($cooldown)) {
-                continue;
-            }
+            foreach ($directions as $direction => $check) {
+                $threshold = $check['cap'] > 0 ? (int) ($check['cap'] * 0.9) : (int) ($check['capacity'] * 0.5);
+                $rate = (int) ($lease[$check['field']] ?? 0);
+                $streak = "mikrotik.{$this->router->id}.hog.{$direction}.{$address}";
 
-            Cache::put($cooldown, true, 600);
-            $who = trim(($lease['comment'] ?? '') ?: ($lease['host'] ?? '')) ?: $address;
-            $share = $capacity > 0 ? round($rate / $capacity * 100) : null;
+                if ($threshold <= 0 || $rate < $threshold) {
+                    Cache::forget($streak);
 
-            SecurityEvent::query()->create([
-                'mikrotik_session_id' => $this->router->id,
-                'occurred_at' => $sampledAt,
-                'severity' => $cap > 0 ? 'info' : 'warning',
-                'category' => 'bandwidth',
-                'title' => $cap > 0 ? 'Klien menyentuh batas bandwidth' : 'Klien memakai bandwidth besar',
-                'detail' => sprintf(
-                    '%s (%s) download %.1f Mbps%s',
-                    $who,
-                    $address,
-                    $rate / 1_000_000,
-                    $share !== null ? " · {$share}% kapasitas" : '',
-                ),
-                'context' => [
-                    'client' => [
-                        'name' => $who,
-                        'address' => $address,
-                        'mac' => $lease['mac'] ?? null,
-                        'down' => $rate,
-                        'share' => $share,
+                    continue;
+                }
+
+                $count = (int) Cache::get($streak, 0) + 1;
+                Cache::put($streak, $count, 60);
+                $cooldown = "{$streak}.logged";
+                if ($count < 3 || Cache::has($cooldown)) {
+                    continue;
+                }
+
+                Cache::put($cooldown, true, 600);
+                $who = trim(($lease['comment'] ?? '') ?: ($lease['host'] ?? '')) ?: $address;
+                $share = $check['capacity'] > 0 ? round($rate / $check['capacity'] * 100) : null;
+
+                SecurityEvent::query()->create([
+                    'mikrotik_session_id' => $this->router->id,
+                    'occurred_at' => $sampledAt,
+                    'severity' => $check['cap'] > 0 ? 'info' : 'warning',
+                    'category' => 'bandwidth',
+                    'title' => $check['cap'] > 0 ? 'Klien menyentuh batas bandwidth' : 'Klien memakai bandwidth besar',
+                    'detail' => sprintf(
+                        '%s (%s) %s %.1f Mbps%s',
+                        $who,
+                        $address,
+                        $check['word'],
+                        $rate / 1_000_000,
+                        $share !== null ? " · {$share}% kapasitas" : '',
+                    ),
+                    'context' => [
+                        'client' => [
+                            'name' => $who,
+                            'address' => $address,
+                            'mac' => $lease['mac'] ?? null,
+                            'direction' => $direction,
+                            'down' => (int) ($lease['rx_bps'] ?? 0),
+                            'up' => (int) ($lease['tx_bps'] ?? 0),
+                            'share' => $share,
+                        ],
+                        ...$this->hogContext($address, $hostTraffic, $sampledAt, $direction),
                     ],
-                    ...$this->hogContext($address, $hostTraffic, $sampledAt),
-                ],
-            ]);
+                ]);
+            }
         }
     }
 
@@ -1089,7 +1107,7 @@ class MikrotikPoller
      *
      * @return array<string, mixed>
      */
-    private function hogContext(string $address, mixed $hostTraffic, Carbon $sampledAt): array
+    private function hogContext(string $address, mixed $hostTraffic, Carbon $sampledAt, string $direction = 'down'): array
     {
         $flows = [];
         foreach ($this->rows($hostTraffic) as $row) {
@@ -1111,7 +1129,8 @@ class MikrotikPoller
             $flows[$remote]['up'] = ($flows[$remote]['up'] ?? 0) + $up;
         }
 
-        uasort($flows, fn (array $left, array $right) => $right['down'] <=> $left['down']);
+        $heavy = $direction === 'up' ? 'up' : 'down';
+        uasort($flows, fn (array $left, array $right) => $right[$heavy] <=> $left[$heavy]);
         $flows = array_slice($flows, 0, 8, true);
         $names = $flows === [] ? [] : $this->dnsNames();
         $connections = [];
@@ -1122,7 +1141,7 @@ class MikrotikPoller
             $port = str_contains($remote, ':') ? (int) substr(strrchr($remote, ':'), 1) : null;
             $name = $names[$ip] ?? null;
             $kind = $name !== null ? $this->dns->kind($name) : 'Tidak diketahui';
-            $byKind[$kind] = ($byKind[$kind] ?? 0) + $rate['down'];
+            $byKind[$kind] = ($byKind[$kind] ?? 0) + $rate[$heavy];
             $connections[] = [
                 'remote' => $ip,
                 'port' => $port,

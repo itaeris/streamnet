@@ -27,9 +27,13 @@ const main = computed(() => shaping.value?.main ?? null);
 const downType = computed(() => shaping.value?.down_type ?? null);
 const upType = computed(() => shaping.value?.up_type ?? null);
 const capacity = computed(() => Number(main.value?.max_down) || 0);
+const capacityUp = computed(() => Number(main.value?.max_up) || 0);
 const capDown = computed(() => Number(downType.value?.rate) || 0);
+const capUp = computed(() => Number(upType.value?.rate) || 0);
 const threshold = computed(() => (capDown.value > 0 ? capDown.value * 0.9 : capacity.value * 0.5));
+const thresholdUp = computed(() => (capUp.value > 0 ? capUp.value * 0.9 : capacityUp.value * 0.5));
 const usage = computed(() => (capacity.value > 0 ? Math.min(100, Math.round(((Number(main.value?.rate_down) || 0) / capacity.value) * 100)) : 0));
+const usageUp = computed(() => (capacityUp.value > 0 ? Math.min(100, Math.round(((Number(main.value?.rate_up) || 0) / capacityUp.value) * 100)) : 0));
 const badge = 'rounded px-1.5 py-0.5 font-mono text-[11px]';
 const mbps = (bps) => Math.round(((Number(bps) || 0) / 1_000_000) * 10) / 10;
 const seconds = (value) => Number(String(value || '').replace(/[^\d]/g, '')) || 10;
@@ -203,8 +207,13 @@ const consumers = computed(() => (live.value?.leases ?? [])
     .filter((lease) => (Number(lease.rx_bps) || 0) + (Number(lease.tx_bps) || 0) + (Number(lease.wan_rx_bps) || 0) > 0));
 const afterQueue = computed(() => (live.value?.leases ?? []).some((lease) => lease.measured === 'queue'));
 const trimmed = (lease) => Math.max(0, (Number(lease.wan_rx_bps) || 0) - (Number(lease.rx_bps) || 0));
-const shareOf = (lease) => (capacity.value > 0 ? Math.round(((Number(lease.rx_bps) || 0) / capacity.value) * 100) : 0);
-const hogging = (lease) => threshold.value > 0 && (Number(lease.rx_bps) || 0) >= threshold.value;
+const shareDown = (lease) => (capacity.value > 0 ? Math.round(((Number(lease.rx_bps) || 0) / capacity.value) * 100) : 0);
+const shareUp = (lease) => (capacityUp.value > 0 ? Math.round(((Number(lease.tx_bps) || 0) / capacityUp.value) * 100) : 0);
+const shareOf = (lease) => Math.max(shareDown(lease), shareUp(lease));
+const hoggingDown = (lease) => threshold.value > 0 && (Number(lease.rx_bps) || 0) >= threshold.value;
+const hoggingUp = (lease) => thresholdUp.value > 0 && (Number(lease.tx_bps) || 0) >= thresholdUp.value;
+const hogging = (lease) => hoggingDown(lease) || hoggingUp(lease);
+const stateLabel = (lease) => (hoggingUp(lease) && !hoggingDown(lease) ? 'upload besar' : hogging(lease) ? 'di atas ambang' : 'normal');
 const nameOf = (lease) => aliasOf(lease) || lease.host || lease.address || '';
 
 function consumerKey(lease) {
@@ -218,7 +227,7 @@ function consumerPreview(lease) {
         title: nameOf(lease) || 'Klien',
         subtitle: lease.mac || '',
         detail: lease.address || '',
-        status: hogging(lease) ? { label: 'di atas ambang', tone: 'warn' } : { label: 'normal', tone: 'ok' },
+        status: hogging(lease) ? { label: stateLabel(lease), tone: 'warn' } : { label: 'normal', tone: 'ok' },
         stream: { rx: Number(lease.rx_bps) || 0, tx: Number(lease.tx_bps) || 0, flows: lease.flows ?? null, at: live.value?.sampled_at ?? null },
         tabs: [{
             id: 'overview',
@@ -227,7 +236,7 @@ function consumerPreview(lease) {
             hero: true,
             metrics: [
                 { label: 'Porsi', value: `${shareOf(lease)}%`, tone: hogging(lease) ? 'warn' : undefined },
-                { label: 'Batas', value: capDown.value > 0 ? formatRate(capDown.value) : 'bagi rata' },
+                { label: 'Batas', value: capDown.value > 0 ? `↓ ${formatRate(capDown.value)} · ↑ ${formatRate(capUp.value)}` : 'bagi rata' },
                 { label: 'Koneksi', value: String(lease.flows ?? '–') },
             ],
             sections: [{
@@ -276,11 +285,13 @@ function incidentMac(incident) {
 }
 
 function incidentUsage(incident) {
-    if (incident.down !== null && incident.down !== undefined) {
-        return `↓ ${formatRate(incident.down)}${incident.share !== null && incident.share !== undefined ? ` · ${incident.share}% kapasitas` : ''}`;
+    const upload = incident.direction === 'up';
+    const rate = upload ? incident.up : incident.down;
+    if (rate !== null && rate !== undefined) {
+        return `${upload ? '↑' : '↓'} ${formatRate(rate)}${incident.share !== null && incident.share !== undefined ? ` · ${incident.share}% kapasitas` : ''}`;
     }
 
-    return String(incident.detail || '').replace(/^.*\)\s*/, '').replace(/^download\s*/, '↓ ');
+    return String(incident.detail || '').replace(/^.*\)\s*/, '').replace(/^download\s*/, '↓ ').replace(/^upload\s*/, '↑ ');
 }
 
 const incidentRanges = [
@@ -467,7 +478,8 @@ function incidentPreview(incident) {
                             { label: 'IP address', value: address || '–' },
                             { label: 'MAC address', value: incidentMac(incident) || '–' },
                             { label: 'Dugaan penyebab', value: guessOf(incident), tone: 'warn', mono: false },
-                            { label: 'Batas per klien', value: capDown.value > 0 ? formatRate(capDown.value) : 'bagi rata' },
+                            { label: 'Batas per klien', value: capDown.value > 0 ? `↓ ${formatRate(capDown.value)} · ↑ ${formatRate(capUp.value)}` : 'bagi rata' },
+                            { label: 'Arah', value: incident.direction === 'up' ? 'Upload' : 'Download', mono: false },
                         ],
                     },
                     ...(lease ? [{
@@ -517,9 +529,9 @@ const consumerColumns = [
     { id: 'address', label: 'IP', type: 'text', first: 'asc', get: (row) => row.address || '', class: 'font-mono text-cyan' },
     { id: 'rx', label: 'Download diterima', type: 'number', first: 'desc', get: (row) => Number(row.rx_bps) || 0, show: (row) => formatRate(row.rx_bps), class: 'font-mono text-cyan' },
     { id: 'tx', label: 'Upload', type: 'number', first: 'desc', get: (row) => Number(row.tx_bps) || 0, show: (row) => formatRate(row.tx_bps), class: 'font-mono text-ok' },
-    { id: 'wan', label: 'Sebelum queue', type: 'number', first: 'desc', get: (row) => Number(row.wan_rx_bps) || 0, show: (row) => formatRate(row.wan_rx_bps), class: 'font-mono text-mist' },
+    { id: 'wan', label: 'Sebelum queue', type: 'number', first: 'desc', get: (row) => Math.max(Number(row.wan_rx_bps) || 0, Number(row.wan_tx_bps) || 0), show: (row) => ((Number(row.wan_tx_bps) || 0) > (Number(row.wan_rx_bps) || 0) ? `↑ ${formatRate(row.wan_tx_bps)}` : formatRate(row.wan_rx_bps)), class: 'font-mono text-mist' },
     { id: 'share', label: 'Porsi kapasitas', type: 'number', first: 'desc', get: shareOf, show: (row) => `${shareOf(row)}%` },
-    { id: 'state', label: 'Status', type: 'number', first: 'desc', get: (row) => (hogging(row) ? 1 : 0), show: (row) => (hogging(row) ? 'di atas ambang' : 'normal') },
+    { id: 'state', label: 'Status', type: 'number', first: 'desc', get: (row) => (hoggingUp(row) ? 2 : hoggingDown(row) ? 1 : 0), show: stateLabel },
 ];
 
 const incidentColumns = [
@@ -552,6 +564,7 @@ const steps = [
         <article class="noc-card p-3">
             <p class="text-[10px] font-semibold tracking-[0.14em] text-mute uppercase">Pemakaian sekarang</p>
             <p class="mt-1 text-2xl font-bold text-cyan"><LiveRate :value="main?.rate_down ?? 0" /></p>
+            <p class="font-mono text-[11px]" :class="usageUp >= 70 ? 'text-warn' : 'text-ok'">upload <LiveRate :value="main?.rate_up ?? 0" /></p>
             <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-well">
                 <div class="h-full rounded-full transition-all duration-500" :class="usage >= 90 ? 'bg-danger' : usage >= 70 ? 'bg-warn' : 'bg-cyan'" :style="{ width: `${usage}%` }" />
             </div>
@@ -589,6 +602,9 @@ const steps = [
             :is-active="(row) => isOpen(consumerKey(row))"
             @open="(row) => open(consumerPreview(row))"
         >
+            <template #tx="{ row }">
+                <span :class="hoggingUp(row) ? 'font-semibold text-warn' : ''">{{ formatRate(row.tx_bps) }}</span>
+            </template>
             <template #share="{ row }">
                 <span class="flex items-center gap-2">
                     <span class="h-1.5 w-24 overflow-hidden rounded-full bg-well">
@@ -598,7 +614,7 @@ const steps = [
                 </span>
             </template>
             <template #state="{ row }">
-                <span :class="[badge, hogging(row) ? 'bg-warn/15 text-warn' : 'bg-ok/10 text-ok']">{{ hogging(row) ? 'di atas ambang' : 'normal' }}</span>
+                <span :class="[badge, hogging(row) ? 'bg-warn/15 text-warn' : 'bg-ok/10 text-ok']">{{ stateLabel(row) }}</span>
             </template>
         </DataTable>
     </template>

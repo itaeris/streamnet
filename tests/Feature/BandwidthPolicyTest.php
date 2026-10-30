@@ -28,9 +28,12 @@ class BandwidthPolicyTest extends TestCase
         ]);
     }
 
-    private function fakeRouter(): void
+    private function fakeRouter(?array $connections = null): void
     {
-        Http::fake(function ($request) {
+        $connections ??= [
+            ['src-address' => '10.10.10.19:5000', 'dst-address' => '1.1.1.1:443', 'orig-rate' => '1000', 'repl-rate' => '200000000'],
+        ];
+        Http::fake(function ($request) use ($connections) {
             $path = parse_url($request->url(), PHP_URL_PATH) ?: '';
 
             $body = match (true) {
@@ -60,9 +63,7 @@ class BandwidthPolicyTest extends TestCase
                     'host-name' => 'V2309',
                     'status' => 'bound',
                 ]],
-                str_ends_with($path, '/ip/firewall/connection') => [
-                    ['src-address' => '10.10.10.19:5000', 'dst-address' => '1.1.1.1:443', 'orig-rate' => '1000', 'repl-rate' => '200000000'],
-                ],
+                str_ends_with($path, '/ip/firewall/connection') => $connections,
                 default => [],
             };
 
@@ -91,6 +92,25 @@ class BandwidthPolicyTest extends TestCase
         $events = SecurityEvent::query()->where('category', 'bandwidth')->get();
         $this->assertCount(1, $events);
         $this->assertStringContainsString('10.10.10.19', $events->first()->detail);
+        $this->assertStringContainsString('download', $events->first()->detail);
+    }
+
+    public function test_poll_logs_a_sustained_upload(): void
+    {
+        $session = $this->router();
+        $this->fakeRouter([
+            ['src-address' => '10.10.10.19:5000', 'dst-address' => '1.1.1.1:443', 'orig-rate' => '200000000', 'repl-rate' => '1000'],
+        ]);
+        $poller = app(MikrotikPoller::class);
+
+        $poller->poll($session);
+        $poller->poll($session);
+        $poller->poll($session);
+
+        $events = SecurityEvent::query()->where('category', 'bandwidth')->get();
+        $this->assertCount(1, $events);
+        $this->assertStringContainsString('upload 200.0 Mbps', $events->first()->detail);
+        $this->assertSame('up', $events->first()->context['client']['direction']);
     }
 
     public function test_apply_sets_pcq_rates_and_queue_capacity(): void
