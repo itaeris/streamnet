@@ -3,8 +3,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import MenuPanel from './MenuPanel.vue';
 
 const props = defineProps({
-    modelValue: { type: String, default: '' },
+    modelValue: { type: [String, Boolean, Number], default: '' },
     options: { type: Array, default: () => [] },
+    compact: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -42,10 +43,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div ref="root" class="relative mt-1 min-w-48">
+    <div ref="root" class="relative" :class="compact ? 'min-w-0' : 'mt-1 min-w-48'">
         <button
             type="button"
-            class="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-edge bg-sink px-3 text-left font-mono text-sm text-paper"
+            class="flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-edge bg-sink text-left text-paper"
+            :class="compact ? 'px-2.5 text-[12px]' : 'px-3 font-mono text-sm'"
             :aria-expanded="open"
             @click="open = !open"
         >
@@ -57,7 +59,7 @@ onBeforeUnmount(() => {
                 v-for="option in options"
                 :key="option.value"
                 type="button"
-                class="block w-full truncate px-3 py-2 text-left font-mono text-sm hover:bg-hover"
+                class="block w-full cursor-pointer truncate px-3 py-2 text-left font-mono text-sm hover:bg-hover"
                 :class="option.value === modelValue ? 'text-cyan' : 'text-paper'"
                 @click="choose(option.value)"
             >

@@ -4,6 +4,7 @@ import { Head, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '../Layouts/AppLayout.vue';
 import DataTable from '../Components/DataTable.vue';
 import LiveRate from '../Components/LiveRate.vue';
+import Dropdown from '../Components/Dropdown.vue';
 import PreviewBinder from '../Components/PreviewBinder.vue';
 import ToggleSwitch from '../Components/ToggleSwitch.vue';
 import { usePreview } from '../composables/usePreview';
@@ -63,6 +64,10 @@ const columns = [
     { id: 'remove', label: '', type: 'text', first: 'asc', get: () => '' },
 ];
 
+const blockOptions = [
+    { value: true, label: 'Blokir' },
+    { value: false, label: 'Buka' },
+];
 const workday = [
     { start: '09:00', end: '11:59', blocked: true, label: 'Jam kerja' },
     { start: '12:00', end: '12:59', blocked: false, label: 'Jam istirahat' },
@@ -331,20 +336,17 @@ function remove(domain) {
             <div v-for="(window, index) in draft" :key="index" class="grid items-center gap-2 sm:grid-cols-[7rem_7rem_8rem_1fr_auto]">
                 <input v-model="window.start" type="time" required class="h-9 rounded-lg bg-sink px-2 font-mono text-[12px] text-paper outline-none">
                 <input v-model="window.end" type="time" required class="h-9 rounded-lg bg-sink px-2 font-mono text-[12px] text-paper outline-none">
-                <select v-model="window.blocked" class="h-9 rounded-lg bg-sink px-2 text-[12px] text-paper outline-none">
-                    <option :value="true">Blokir</option>
-                    <option :value="false">Buka</option>
-                </select>
+                <Dropdown v-model="window.blocked" compact :options="blockOptions" />
                 <input v-model="window.label" type="text" required maxlength="40" placeholder="Jam kerja" class="h-9 rounded-lg bg-sink px-2 text-[12px] text-paper outline-none">
-                <button type="button" class="font-mono text-[11px] text-danger" @click="draft.splice(index, 1)">Hapus</button>
+                <button type="button" class="inline-flex h-9 cursor-pointer items-center rounded-full bg-danger/15 px-2.5 text-[11px] font-semibold text-danger transition hover:brightness-110 active:scale-[0.99]" @click="draft.splice(index, 1)">Hapus</button>
             </div>
         </div>
         <p v-if="scheduleError" class="mt-2 text-[11px] text-danger">{{ scheduleError }}</p>
         <div class="mt-3 flex flex-wrap items-center gap-2">
             <button type="button" class="h-9 rounded-full bg-tile px-3 text-[12px] font-semibold" @click="addWindow">Tambah jam</button>
             <button type="submit" class="h-9 rounded-full bg-cyan-2 px-3 text-[12px] font-semibold text-[#003640] disabled:opacity-60" :disabled="savingSchedule">{{ savingSchedule ? 'Menyimpan…' : 'Simpan jadwal' }}</button>
-            <button type="button" class="h-9 px-2 text-[12px] text-danger" :disabled="savingSchedule" @click="clearSchedule">Hapus jadwal</button>
-            <button type="button" class="h-9 px-2 text-[12px] text-mist" @click="editing = ''">Batal</button>
+            <button type="button" class="inline-flex h-9 cursor-pointer items-center rounded-full bg-danger/15 px-3 text-[12px] font-semibold text-danger transition hover:brightness-110 active:scale-[0.99] disabled:opacity-50" :disabled="savingSchedule" @click="clearSchedule">Hapus jadwal</button>
+            <button type="button" class="inline-flex h-9 cursor-pointer items-center rounded-full bg-tile px-3 text-[12px] font-semibold text-mist transition hover:brightness-110 active:scale-[0.99]" @click="editing = ''">Batal</button>
         </div>
     </form>
 
