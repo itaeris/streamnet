@@ -118,6 +118,24 @@ function queueMbps(isp) {
 const queueDown = computed(() => queueMbps(ispDown.value));
 const queueUp = computed(() => queueMbps(ispUp.value));
 const formulaReady = computed(() => queueDown.value > 0 && queueUp.value > 0);
+const recommendShare = 0.2;
+
+function recommendMbps(queue) {
+    const speed = Number(queue);
+    if (!Number.isFinite(speed) || speed <= 0) {
+        return 0;
+    }
+
+    return Math.round(speed * recommendShare * 10) / 10;
+}
+
+const recommendDown = computed(() => recommendMbps(queueDown.value));
+const recommendUp = computed(() => recommendMbps(queueUp.value));
+
+function applyRecommendation() {
+    form.client_down = recommendDown.value;
+    form.client_up = recommendUp.value;
+}
 
 watch([queueDown, queueUp], ([down, up]) => {
     form.capacity_down = down;
@@ -703,6 +721,16 @@ const steps = [
                         <p v-else class="mt-1 text-sm text-warn">Isi kecepatan ISP yang lebih besar dari toleransi.</p>
                         <p v-if="formulaReady" class="mt-1 font-mono text-[11px] text-mute">{{ ispDown }} − {{ tolerance }} = {{ queueDown }} Mbps download · {{ ispUp }} − {{ tolerance }} = {{ queueUp }} Mbps upload</p>
                         <p v-if="wanPeak?.rx" class="mt-1 text-[11px] text-mute">Puncak pemakaian WAN 24 jam {{ formatRate(wanPeak.rx) }} download<span v-if="wanPeak.tx"> · {{ formatRate(wanPeak.tx) }} upload</span>. Itu pemakaian, bukan kecepatan paket ISP.</p>
+                    </div>
+                    <div v-if="formulaReady" class="rounded-xl bg-sink px-4 py-3 sm:col-span-2">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p class="text-[12px] font-medium text-mist">Rekomendasi batas per klien</p>
+                                <p class="mt-1 text-sm font-semibold">Download {{ recommendDown }} Mbps · Upload {{ recommendUp }} Mbps</p>
+                                <p class="mt-1 font-mono text-[11px] text-mute">20% kapasitas queue. Lima klien yang menyentuh batas sudah memenuhi paket ISP, lalu PCQ membagi sisanya.</p>
+                            </div>
+                            <button type="button" class="h-9 shrink-0 cursor-pointer rounded-full bg-tile px-3 text-[12px] font-semibold text-paper transition hover:brightness-110" @click="applyRecommendation">Pakai rekomendasi</button>
+                        </div>
                     </div>
                     <label class="block text-[12px] font-medium text-mist">
                         Batas per klien download
