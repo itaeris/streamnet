@@ -19,6 +19,7 @@ const props = defineProps({
 
 const form = useForm({ domain: '' });
 const removing = ref('');
+const cloudflarePending = ref(null);
 const pending = ref({});
 const toggleError = ref('');
 const dropBps = ref(0);
@@ -268,6 +269,22 @@ function toggle(row) {
     });
 }
 
+const cloudflareOn = computed(() => (cloudflarePending.value === null ? props.filter?.cloudflare?.enabled === true : cloudflarePending.value));
+
+function toggleCloudflare(next) {
+    cloudflarePending.value = next;
+    toggleError.value = '';
+    router.put('/dns-filter/cloudflare', { enabled: next }, {
+        preserveScroll: true,
+        onError: (errors) => {
+            toggleError.value = errors.cloudflare || 'Router menolak perubahan DNS.';
+        },
+        onFinish: () => {
+            cloudflarePending.value = null;
+        },
+    });
+}
+
 function remove(domain) {
     removing.value = domain;
     router.delete('/dns-filter', {
@@ -302,6 +319,15 @@ function remove(domain) {
             <p class="mt-1 text-2xl font-bold text-cyan"><LiveRate :value="dropBps" split /></p>
             <p class="mt-1 font-mono text-[10px] text-mute">{{ loading ? '–' : `${Number(filter?.packets || 0).toLocaleString('id-ID')} paket` }}</p>
         </article>
+    </section>
+
+    <section class="noc-card mt-3 flex flex-wrap items-center justify-between gap-3 p-3">
+        <div class="min-w-0">
+            <p class="text-sm font-semibold">Filter DNS Cloudflare</p>
+            <p class="mt-1 max-w-3xl font-mono text-[11px] text-mute">Saat nyala, query DNS router diarahkan ke 1.1.1.3 dan 1.0.0.3. Cloudflare memblokir malware dan situs dewasa. Saat mati, server DNS sebelumnya dikembalikan. Daftar Layer 7 tetap berjalan.</p>
+            <p v-if="filter?.cloudflare?.servers" class="mt-1 font-mono text-[11px] text-mute">Server sekarang: {{ filter.cloudflare.servers }}</p>
+        </div>
+        <ToggleSwitch :model-value="cloudflareOn" label="Cloudflare" :hint="cloudflareOn ? 'Nyala' : 'Mati'" @update:model-value="toggleCloudflare" />
     </section>
 
     <form class="noc-card mt-3 flex flex-wrap items-end gap-2 p-3" @submit.prevent="block">

@@ -16,6 +16,7 @@ class MikrotikSession extends Model
         'username',
         'password',
         'wan_interface',
+        'dns_servers_backup',
         'enabled',
     ];
 

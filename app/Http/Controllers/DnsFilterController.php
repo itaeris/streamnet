@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DnsFilterWindow;
 use App\Services\AnalyticsQuery;
 use App\Services\DnsFilterSchedule;
+use App\Services\Mikrotik\CloudflareDns;
 use App\Services\Mikrotik\CurrentMikrotikSession;
 use App\Services\Mikrotik\DnsFilter;
 use Illuminate\Http\RedirectResponse;
@@ -14,7 +15,7 @@ use Inertia\Response;
 
 class DnsFilterController extends Controller
 {
-    public function index(AnalyticsQuery $analytics, CurrentMikrotikSession $current, DnsFilter $filter): Response
+    public function index(AnalyticsQuery $analytics, CurrentMikrotikSession $current, DnsFilter $filter, CloudflareDns $cloudflare): Response
     {
         $session = $current->resolve();
 
@@ -24,6 +25,7 @@ class DnsFilterController extends Controller
             'filter' => $session ? fn () => [
                 ...$filter->present($filter->read($session)),
                 'schedules' => $this->schedules($session->id),
+                'cloudflare' => $cloudflare->status($session),
             ] : [
                 'online' => false,
                 'rule' => false,
@@ -34,6 +36,7 @@ class DnsFilterController extends Controller
                 'regexp' => '',
                 'sites' => [],
                 'schedules' => [],
+                'cloudflare' => ['online' => false, 'enabled' => false, 'servers' => ''],
             ],
         ]);
     }
@@ -143,6 +146,23 @@ class DnsFilterController extends Controller
         }
 
         $schedule->enforce($session);
+
+        return back();
+    }
+
+    public function cloudflare(Request $request, CurrentMikrotikSession $current, CloudflareDns $cloudflare): RedirectResponse
+    {
+        $session = $current->resolve();
+        abort_unless($session, 404);
+
+        $request->validate([
+            'enabled' => ['required', 'boolean'],
+        ]);
+
+        $error = $cloudflare->apply($session, $request->boolean('enabled'));
+        if ($error !== null) {
+            return back()->withErrors(['cloudflare' => $error]);
+        }
 
         return back();
     }
