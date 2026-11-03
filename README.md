@@ -113,7 +113,7 @@ composer test
 
 ## Deploy
 
-Push ke `main` menjalankan `.github/workflows/deploy.yml`: tes, build image `itaeris/streamnet_app`, lalu di server container lama `streamnet_app` di-stop dan dihapus sebelum container baru jalan di port `2700` pada network `streamnet-network`. MySQL tidak dibuat ulang. `DB_HOST` di secret `BACKEND_ENV` harus nama container MySQL yang sudah ada, dan container itu harus sudah tersambung ke `streamnet-network`.
+Push ke `main` menjalankan `.github/workflows/deploy.yml`: tes, build image `itaeris/streamnet_app`, lalu di server container `streamnet_app` di-stop, container dan image lokalnya dihapus, image baru di-pull, lalu container jalan di port `2700` pada network `streamnet-network`. MySQL tidak dibuat ulang. `DB_HOST` di secret `BACKEND_ENV` harus nama container MySQL yang sudah ada, dan container itu harus sudah tersambung ke `streamnet-network`.
 
 Saat container mulai, `php artisan migrate --force` hanya menambah migrasi yang belum tercatat. `AdminUserSeeder` membuat user dari `DASHBOARD_EMAIL` dan `DASHBOARD_PASSWORD` sekali. Deploy berikutnya tidak menimpa password.
 

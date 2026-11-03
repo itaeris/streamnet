@@ -173,12 +173,16 @@ jobs:
             }
             attach mysql yes
             attach redis no
-            printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin >/dev/null
-            docker pull "$IMAGE"
             if docker ps -a --format '{{.Names}}' | grep -qx streamnet_app; then
               docker stop streamnet_app
               docker rm streamnet_app
             fi
+            old="$(docker images 'itaeris/streamnet_app' --format '{{.ID}}' | sort -u || true)"
+            if [ -n "$old" ]; then
+              docker rmi -f $old
+            fi
+            printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin >/dev/null
+            docker pull "$IMAGE"
             docker run -d \
               --name streamnet_app \
               --restart unless-stopped \
