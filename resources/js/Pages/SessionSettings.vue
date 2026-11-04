@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import EnterGate from '../Components/EnterGate.vue';
 import { useTheme } from '../composables/useTheme';
 import ToggleSwitch from '../Components/ToggleSwitch.vue';
 
@@ -11,6 +12,7 @@ const props = defineProps({
 });
 
 const { theme, toggleTheme } = useTheme();
+const entering = ref(false);
 const confirmDelete = ref(false);
 const confirmDisconnect = ref(false);
 
@@ -103,6 +105,7 @@ function destroySession() {
 
 <template>
     <Head :title="session ? session.name : 'Tambah sesi'" />
+    <EnterGate :active="entering" :name="session?.identity || session?.name || ''" @cancel="entering = false" />
 
     <div class="min-h-screen bg-canvas text-paper">
         <header class="flex items-center justify-between gap-3 px-4 py-4 sm:px-8">
@@ -146,7 +149,8 @@ function destroySession() {
                     :href="`/pengaturan/sesi/${session.id}/aktif`"
                     method="post"
                     as="button"
-                    class="inline-flex h-10 items-center gap-2 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640]"
+                    class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-cyan-2 px-4 text-sm font-semibold text-[#003640]"
+                    @click="entering = true"
                 >
                     <Icon class="text-[18px]" name="arrow_forward" />
                     Masuk

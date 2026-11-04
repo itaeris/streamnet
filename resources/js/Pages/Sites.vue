@@ -1,5 +1,7 @@
 <script setup>
+import { ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
+import EnterGate from '../Components/EnterGate.vue';
 import TrafficChart from '../Components/TrafficChart.vue';
 import { useTheme } from '../composables/useTheme';
 import { formatRate } from '../lib/format';
@@ -7,6 +9,8 @@ import { formatRate } from '../lib/format';
 defineProps({
     sessions: { type: Array, default: () => [] },
 });
+
+const entering = ref(null);
 
 const { theme, toggleTheme } = useTheme();
 
@@ -25,6 +29,7 @@ function statusOf(session) {
 
 <template>
     <Head title="Sesi" />
+    <EnterGate :active="entering !== null" :name="entering?.identity || entering?.name || ''" @cancel="entering = null" />
 
     <div class="min-h-screen bg-canvas text-paper">
         <header class="flex items-center justify-between gap-3 px-4 py-4 sm:px-8">
@@ -110,6 +115,7 @@ function statusOf(session) {
                                 method="post"
                                 as="button"
                                 class="inline-flex h-8 cursor-pointer items-center gap-1 rounded-full bg-cyan-2 px-3 text-xs font-semibold text-[#003640] transition hover:brightness-110 active:scale-[0.99]"
+                                @click="entering = session"
                             >
                                 Masuk
                                 <Icon class="text-[14px]" name="arrow_forward" />
