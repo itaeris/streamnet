@@ -6,8 +6,11 @@ use App\Models\MikrotikSession;
 use App\Models\UnifiConnection;
 use App\Services\Mikrotik\CurrentMikrotikSession;
 use App\Services\Unifi\UnifiClient;
+use App\Support\OutboundUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class UnifiSettingsController extends Controller
 {
@@ -42,6 +45,11 @@ class UnifiSettingsController extends Controller
         ]);
 
         $data['url'] = rtrim($data['url'], '/');
+        try {
+            OutboundUrl::assertAllowed($data['url']);
+        } catch (RuntimeException $exception) {
+            throw ValidationException::withMessages(['url' => $exception->getMessage()]);
+        }
         $data['site'] = filled($data['site'] ?? null) ? trim($data['site']) : null;
         $data['verify_tls'] = $request->boolean('verify_tls');
         if (blank($data['api_key'] ?? null)) {

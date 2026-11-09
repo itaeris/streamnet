@@ -35,4 +35,24 @@ class AdminUserSeederTest extends TestCase
 
         (new AdminUserSeeder)->seedAdmin('new@stream.test', 'Wiki', null);
     }
+
+    public function test_run_does_not_invent_a_password_when_the_env_is_empty(): void
+    {
+        $previous = getenv('DASHBOARD_PASSWORD');
+        putenv('DASHBOARD_PASSWORD');
+        unset($_ENV['DASHBOARD_PASSWORD'], $_SERVER['DASHBOARD_PASSWORD']);
+
+        try {
+            (new AdminUserSeeder)->run();
+            $this->fail('Seeder membuat admin tanpa password.');
+        } catch (RuntimeException) {
+            $this->assertSame(0, User::query()->count());
+        } finally {
+            if ($previous !== false) {
+                putenv('DASHBOARD_PASSWORD='.$previous);
+                $_ENV['DASHBOARD_PASSWORD'] = $previous;
+                $_SERVER['DASHBOARD_PASSWORD'] = $previous;
+            }
+        }
+    }
 }

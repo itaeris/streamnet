@@ -58,6 +58,7 @@ class LoginController extends Controller
         $request->user()->update([
             'password' => $data['password'],
         ]);
+        $request->user()->logoutSessions($request->session()->getId());
         $request->session()->regenerate();
 
         return back();

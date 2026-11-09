@@ -164,6 +164,15 @@ class AccessPointTest extends TestCase
         $this->assertNotSame('secret-unifi-key', $connection->getRawOriginal('api_key'));
 
         $this->actingAs($user)
+            ->put('/sesi/'.$session->name.'/unifi', [
+                'url' => 'http://169.254.169.254/latest/meta-data',
+                'api_key' => 'secret-unifi-key',
+                'verify_tls' => true,
+            ])
+            ->assertSessionHasErrors('url');
+        $this->assertSame('https://unifi.example.test', $connection->fresh()->url);
+
+        $this->actingAs($user)
             ->put('/sesi/'.$session->name.'/unifi', ['url' => 'https://unifi.example.test', 'api_key' => '', 'verify_tls' => false])
             ->assertSessionHasNoErrors();
         $this->assertSame('secret-unifi-key', $connection->fresh()->api_key);

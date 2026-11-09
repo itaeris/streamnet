@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -64,5 +65,29 @@ class UserManagementTest extends TestCase
 
         $this->actingAs($admin)->delete("/pengaturan/pengguna/{$other->id}")->assertRedirect('/pengaturan/pengguna');
         $this->assertNull($other->fresh());
+    }
+
+    public function test_replacing_a_password_drops_that_users_sessions(): void
+    {
+        config(['session.driver' => 'database']);
+        $admin = User::factory()->create();
+        $user = User::factory()->create();
+        DB::table('sessions')->insert([
+            'id' => 'stolen-session',
+            'user_id' => $user->id,
+            'payload' => 'x',
+            'last_activity' => time(),
+        ]);
+
+        $this->actingAs($admin)
+            ->put("/pengaturan/pengguna/{$user->id}", [
+                'name' => $user->name,
+                'email' => $user->email,
+                'password' => 'rahasia-baru',
+                'password_confirmation' => 'rahasia-baru',
+            ])
+            ->assertRedirect('/pengaturan/pengguna');
+
+        $this->assertDatabaseMissing('sessions', ['id' => 'stolen-session']);
     }
 }

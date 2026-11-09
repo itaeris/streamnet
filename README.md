@@ -119,7 +119,7 @@ Akun operator dibuat saat seed dari:
 | Variabel | Fungsi |
 | --- | --- |
 | `DASHBOARD_EMAIL` | Email login. Bawaan `it@aerisbeaute.com`. |
-| `DASHBOARD_PASSWORD` | Password login. Kalau kosong, seeder memakai password bawaannya. |
+| `DASHBOARD_PASSWORD` | Password login admin pertama. Wajib diisi. Deploy menolak membuat akun kalau kosong. |
 
 ## Sesi MikroTik
 

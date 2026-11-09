@@ -15,6 +15,9 @@ class ExampleTest extends TestCase
     {
         $this->withoutVite();
 
-        $this->get('/login')->assertOk();
+        $this->get('/login')
+            ->assertOk()
+            ->assertHeader('X-Frame-Options', 'DENY')
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
     }
 }

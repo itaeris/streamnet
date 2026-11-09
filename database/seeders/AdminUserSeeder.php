@@ -16,7 +16,7 @@ class AdminUserSeeder extends Seeder
         $this->seedAdmin(
             (string) env('DASHBOARD_EMAIL', 'it@aerisbeaute.com'),
             (string) env('DASHBOARD_NAME', 'IT'),
-            env('DASHBOARD_PASSWORD') ?: 'aerisbeaute',
+            env('DASHBOARD_PASSWORD'),
         );
     }
 

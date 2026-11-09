@@ -4,6 +4,7 @@ namespace App\Services\Unifi;
 
 use App\Models\UnifiConnection;
 use App\Services\Mikrotik\CurrentMikrotikSession;
+use App\Support\OutboundUrl;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -166,8 +167,10 @@ class UnifiClient
     private function activeClients(string $site): array
     {
         try {
+            $base = rtrim((string) $this->connection()?->url, '/');
+            OutboundUrl::assertAllowed($base);
             $response = $this->prepare(Http::acceptJson())
-                ->get(rtrim((string) $this->connection()?->url, '/')."/proxy/network/v2/api/site/{$site}/clients/active");
+                ->get($base."/proxy/network/v2/api/site/{$site}/clients/active");
         } catch (Throwable) {
             return [];
         }
@@ -315,12 +318,18 @@ class UnifiClient
             ->withHeaders(['X-API-KEY' => (string) $this->connection()?->api_key])
             ->acceptJson()
             ->timeout(max(1, (int) config('unifi.timeout')))
-            ->withOptions(['verify' => (bool) ($this->connection()?->verify_tls ?? true)]);
+            ->withOptions([
+                'allow_redirects' => false,
+                'verify' => (bool) ($this->connection()?->verify_tls ?? true),
+            ]);
     }
 
     private function url(string $path): string
     {
-        return rtrim((string) $this->connection()?->url, '/').self::BASE.$path;
+        $base = rtrim((string) $this->connection()?->url, '/');
+        OutboundUrl::assertAllowed($base);
+
+        return $base.self::BASE.$path;
     }
 
     /**

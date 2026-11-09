@@ -13,7 +13,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->trustProxies(at: '*');
+        $middleware->trustProxies(at: ['127.0.0.1', '::1']);
+        $middleware->trustHosts(at: function () {
+            $host = parse_url((string) config('app.url'), PHP_URL_HOST);
+
+            return array_values(array_unique(array_filter([
+                '^localhost$',
+                '^127\.0\.0\.1$',
+                '^\[::1\]$',
+                is_string($host) && $host !== '' ? '^'.preg_quote($host, '/').'$' : null,
+            ])));
+        }, subdomains: false);
         $middleware->encryptCookies(except: ['board_live']);
         $middleware->redirectGuestsTo('/login');
         $middleware->redirectUsersTo('/');
@@ -22,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\BindSiteSession::class,
             \App\Http\Middleware\PreferLiveWindow::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
+            \App\Http\Middleware\SecurityHeaders::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

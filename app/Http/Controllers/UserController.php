@@ -45,6 +45,10 @@ class UserController extends Controller
         }
 
         $user->update($data);
+        if (filled($data['password'] ?? null)) {
+            $except = $user->id === $request->user()->id ? $request->session()->getId() : null;
+            $user->logoutSessions($except);
+        }
 
         return redirect()->route('settings.users');
     }
