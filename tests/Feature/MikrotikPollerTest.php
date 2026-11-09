@@ -334,7 +334,10 @@ class MikrotikPollerTest extends TestCase
             'enabled' => true,
         ]);
 
-        Http::fake(function ($request) {
+        $at = now()->subMinutes(10);
+        $stamp = fn (int $seconds) => $at->copy()->addSeconds($seconds)->format('Y-m-d H:i:s');
+
+        Http::fake(function ($request) use ($stamp) {
             $path = parse_url($request->url(), PHP_URL_PATH) ?: '';
 
             $body = match (true) {
@@ -358,43 +361,43 @@ class MikrotikPollerTest extends TestCase
                 str_ends_with($path, '/log') => [
                     [
                         '.id' => '*21',
-                        'time' => '2026-10-29 11:00:00',
+                        'time' => $stamp(0),
                         'topics' => 'dns',
                         'message' => 'query from 10.10.10.10: #12 www.youtube.com. A',
                     ],
                     [
                         '.id' => '*22',
-                        'time' => '2026-10-29 11:00:01',
+                        'time' => $stamp(1),
                         'topics' => 'dns',
                         'message' => 'query from 10.10.10.10: #13 clients2.google.com. A',
                     ],
                     [
                         '.id' => '*23',
-                        'time' => '2026-10-29 11:00:02',
+                        'time' => $stamp(2),
                         'topics' => 'dns',
                         'message' => 'query from 10.10.10.10: #14 10.10.10.1.in-addr.arpa. PTR',
                     ],
                     [
                         '.id' => '*24',
-                        'time' => '2026-10-29 11:00:30',
+                        'time' => $stamp(30),
                         'topics' => 'dns',
                         'message' => 'query from 10.10.10.10: #15 www.youtube.com. A',
                     ],
                     [
                         '.id' => '*25',
-                        'time' => '2026-10-29 11:01:05',
+                        'time' => $stamp(65),
                         'topics' => 'dns',
                         'message' => 'query from 10.10.10.10: #16 www.youtube.com. A',
                     ],
                     [
                         '.id' => '*27',
-                        'time' => '2026-10-29 11:01:05',
+                        'time' => $stamp(65),
                         'topics' => 'dns',
                         'message' => 'done query: #16 www.youtube.com. 142.250.4.93',
                     ],
                     [
                         '.id' => '*26',
-                        'time' => '2026-10-29 11:01:06',
+                        'time' => $stamp(66),
                         'topics' => 'dhcp,info',
                         'message' => 'defconf assigned 10.10.10.10',
                     ],
