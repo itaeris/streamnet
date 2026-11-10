@@ -13,6 +13,7 @@ use App\Models\SecurityEvent;
 use App\Models\SystemSample;
 use App\Services\DnsActivity;
 use App\Services\DnsFilterSchedule;
+use App\Services\SampleRetention;
 use App\Services\TrafficAgent;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -1605,12 +1606,7 @@ class MikrotikPoller
 
     private function prune(): void
     {
-        SystemSample::query()->where('sampled_at', '<', now()->subHours(48))->delete();
-        InterfaceSample::query()->where('sampled_at', '<', now()->subDays(30))->delete();
-        QueueSample::query()->where('sampled_at', '<', now()->subDays(30))->delete();
-        RouterLog::query()->where('logged_at', '<', now()->subDays(14))->delete();
-        DnsQuery::query()->where('logged_at', '<', now()->subDays(7))->delete();
-        SecurityEvent::query()->where('occurred_at', '<', now()->subDays(30))->delete();
+        app(SampleRetention::class)->prune();
     }
 
     /**

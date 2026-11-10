@@ -102,7 +102,7 @@ npm run build
 composer dev
 ```
 
-`composer dev` menjalankan empat proses: Octane di `127.0.0.1:8000`, Reverb, `php artisan mikrotik:watch`, dan `php artisan mikrotik:torch`. Pemantau menggilir setiap sesi yang diaktifkan setiap `MIKROTIK_POLL_SECONDS` (bawaan 5 detik).
+`composer dev` menjalankan empat proses: Octane di `127.0.0.1:8000`, Reverb, `php artisan mikrotik:watch`, dan `php artisan mikrotik:torch`. Pemantau menggilir setiap sesi yang diaktifkan setiap `MIKROTIK_POLL_SECONDS` (bawaan 5 detik). Sampel, log, query DNS, dan kejadian yang sudah lewat 30 hari dihapus otomatis, seperti rekaman CCTV.
 
 Binary `frankenphp` diunduh ke root proyek oleh `php artisan octane:install --server=frankenphp` dan tidak ikut di-commit. FrankenPHP membawa PHP sendiri. `PHP_INI_SCAN_DIR` dikosongkan untuk proses itu (`OCTANE_PHP_INI_SCAN_DIR`) supaya tidak memuat ekstensi `.so` milik PHP sistem. Di produksi, HTTP dilayani Nginx dan PHP-FPM, bukan Octane.
 
